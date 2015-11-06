@@ -267,6 +267,7 @@ struct ofproto_route {
 #define OFPROTO_ECMP_HASH_DSTPORT        0x2     /* source L4 port */
 #define OFPROTO_ECMP_HASH_SRCIP          0x4     /* source IP v4/v6 */
 #define OFPROTO_ECMP_HASH_DSTIP          0x8     /* source IP v4/v6 */
+#define OFPROTO_ECMP_HASH_RESILIENT      0x10    /* resilient hashing */
 
 enum ofproto_host_action {
     OFPROTO_HOST_ADD,
