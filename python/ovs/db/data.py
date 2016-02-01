@@ -547,7 +547,7 @@ class Datum(object):
         return s
 
     def cEnumConst(self, prefix):
-        if len(self.values) > 1:
+        if len(self.values) > 0:
             s = []
             for en in sorted(self.values):
                 sv = re.sub('[\"]', '', en.to_string())
@@ -560,7 +560,7 @@ class Datum(object):
             return "\n".join(s)
 
     def cEnumType(self, prefix):
-        if len(self.values) > 1:
+        if len(self.values) > 0:
             s = []
             for en in sorted(self.values):
                 ev = re.sub('[\"]', '', en.to_string())
