@@ -23,4 +23,4 @@ This test case confirms that the OVSDB socket file permissions are valid.
 ```
 
 ### Description
-Validate that the socket files in /var/run/openvswitch have file permission of type ‘srwxrw’ and has ‘ovsdb_users’ as the file owner.
+Validate that the socket files in /var/run/openvswitch have file permission of type ‘srwxrw’ and has ‘ovsdb-client’ as the file group owner.
