@@ -1448,6 +1448,22 @@ static struct cmd_show_table cmd_show_tables[] = {
       &ovsrec_ospf_route_col_prefix},
      {NULL, NULL, NULL}
     },
+    {&ovsrec_table_route,
+     &ovsrec_route_col_address_family,
+     {
+      &ovsrec_route_col_distance,
+      &ovsrec_route_col_from,
+      &ovsrec_route_col_metric},
+     {NULL, NULL, NULL}
+    },
+    {&ovsrec_table_nexthop,
+     &ovsrec_nexthop_col_external_ids,
+     {
+      &ovsrec_nexthop_col_status,
+      &ovsrec_nexthop_col_selected,
+      &ovsrec_nexthop_col_weight},
+     {NULL, NULL, NULL}
+    },
 #endif
     {&ovsrec_table_manager,
      &ovsrec_manager_col_target,
@@ -3447,6 +3463,14 @@ static const struct ctl_table_class tables[] = {
      {&ovsrec_table_ospf_route,
      {{&ovsrec_table_ospf_route,
        &ovsrec_ospf_route_col_paths, NULL},
+     {NULL, NULL, NULL}}},
+     {&ovsrec_table_route,
+     {{&ovsrec_table_route,
+       &ovsrec_route_col_from, NULL},
+     {NULL, NULL, NULL}}},
+     {&ovsrec_table_nexthop,
+     {{&ovsrec_table_nexthop,
+       &ovsrec_nexthop_col_external_ids, NULL},
      {NULL, NULL, NULL}}},
 #endif
     {&ovsrec_table_interface,
