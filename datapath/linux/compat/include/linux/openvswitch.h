@@ -44,6 +44,10 @@
 #include <linux/types.h>
 #include <linux/if_ether.h>
 
+#if defined (OPS) && defined (arp_op)
+#undef arp_op
+#endif
+
 /**
  * struct ovs_header - header for OVS Generic Netlink messages.
  * @dp_ifindex: ifindex of local port for datapath (0 to make a request not
