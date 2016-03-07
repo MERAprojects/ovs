@@ -1,4 +1,10 @@
 # vtep IDL
+if OPS
+ovslibincludedir = $(includedir)/ovs
+ovslibinclude_HEADERS += \
+	vtep/vtep-idl.h
+endif
+
 OVSIDL_BUILT += \
 	vtep/vtep-idl.c \
 	vtep/vtep-idl.h \
@@ -7,19 +13,10 @@ EXTRA_DIST += vtep/vtep-idl.ann
 VTEP_IDL_FILES = \
 	$(srcdir)/vtep/vtep.ovsschema \
 	$(srcdir)/vtep/vtep-idl.ann
-vtep/vtep-idl.ovsidl: $(VTEP_IDL_FILES)
+    $(srcdir)/vtep/vtep-idl.ovsidl: $(VTEP_IDL_FILES)
 	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(VTEP_IDL_FILES) > $@.tmp && \
 	mv $@.tmp $@
-
-# libvtep
-lib_LTLIBRARIES += vtep/libvtep.la
-vtep_libvtep_la_LDFLAGS = \
-	-version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE) \
-	-Wl,--version-script=$(top_builddir)/vtep/libvtep.sym \
-	$(AM_LDFLAGS)
-nodist_vtep_libvtep_la_SOURCES = \
-	vtep/vtep-idl.c \
-	vtep/vtep-idl.h
+    CLEANFILES += vtep/vtep-idl.c vtep/vtep-idl.h
 
 bin_PROGRAMS += \
    vtep/vtep-ctl
@@ -33,8 +30,8 @@ DISTCLEANFILES += \
 man_MANS += \
    vtep/vtep-ctl.8
 
-vtep_vtep_ctl_SOURCES = $(srcdir)/vtep/vtep-ctl.c
-vtep_vtep_ctl_LDADD = vtep/libvtep.la lib/libopenvswitch.la
+vtep_vtep_ctl_SOURCES = vtep/vtep-ctl.c
+vtep_vtep_ctl_LDADD = lib/libovscommon.la ovsdb/libovsdb.la lib/libopenvswitch.la vtep/libvtep.la
 
 # ovs-vtep
 scripts_SCRIPTS += \
@@ -69,7 +66,7 @@ EXTRA_DIST += vtep/vtep.xml
 DISTCLEANFILES += vtep/vtep.5
 man_MANS += vtep/vtep.5
 vtep/vtep.5: \
-	ovsdb/ovsdb-doc vtep/vtep.xml $(srcdir)/vtep/vtep.ovsschema $(VTEP_PIC)
+	ovsdb/ovsdb-doc vtep/vtep.xml vtep/vtep.ovsschema $(VTEP_PIC)
 	$(AM_V_GEN)$(OVSDB_DOC) \
 		$(VTEP_DOT_DIAGRAM_ARG) \
 		--version=$(VERSION) \
