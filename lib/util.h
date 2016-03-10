@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,10 +53,14 @@
 /* Build-time assertion for use in a declaration context. */
 #define BUILD_ASSERT_DECL(EXPR) \
         extern int (*build_assert(void))[BUILD_ASSERT__(EXPR)]
-#else /* __cplusplus */
+#elif __cplusplus <= 199711L /* __cplusplus */
 #include <boost/static_assert.hpp>
 #define BUILD_ASSERT BOOST_STATIC_ASSERT
 #define BUILD_ASSERT_DECL BOOST_STATIC_ASSERT
+#else
+#define BUILD_ASSERT_FAILED_MSG(EXPR) "Assertion " #EXPR " failed during compilation."
+#define BUILD_ASSERT(EXPR) static_assert(EXPR,BUILD_ASSERT_FAILED_MSG(EXPR))
+#define BUILD_ASSERT_DECL(EXPR) static_assert(EXPR,BUILD_ASSERT_FAILED_MSG(EXPR))
 #endif /* __cplusplus */
 
 #ifdef __GNUC__
