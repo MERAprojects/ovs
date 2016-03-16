@@ -103,6 +103,36 @@ struct netdev_stats {
     uint64_t tx_fifo_errors;
     uint64_t tx_heartbeat_errors;
     uint64_t tx_window_errors;
+
+    /* L3 stats */
+    uint64_t l3_uc_tx_packets;
+    uint64_t l3_uc_tx_bytes;
+    uint64_t l3_uc_rx_packets;
+    uint64_t l3_uc_rx_bytes;
+    uint64_t l3_mc_tx_packets;
+    uint64_t l3_mc_tx_bytes;
+    uint64_t l3_mc_rx_packets;
+    uint64_t l3_mc_rx_bytes;
+
+    /* IPv4 L3 stats */
+    uint64_t ipv4_uc_tx_packets;
+    uint64_t ipv4_uc_tx_bytes;
+    uint64_t ipv4_uc_rx_packets;
+    uint64_t ipv4_uc_rx_bytes;
+    uint64_t ipv4_mc_tx_packets;
+    uint64_t ipv4_mc_tx_bytes;
+    uint64_t ipv4_mc_rx_packets;
+    uint64_t ipv4_mc_rx_bytes;
+
+    /* IPv6 L3 stats */
+    uint64_t ipv6_uc_tx_packets;
+    uint64_t ipv6_uc_tx_bytes;
+    uint64_t ipv6_uc_rx_packets;
+    uint64_t ipv6_uc_rx_bytes;
+    uint64_t ipv6_mc_tx_packets;
+    uint64_t ipv6_mc_tx_bytes;
+    uint64_t ipv6_mc_rx_packets;
+    uint64_t ipv6_mc_rx_bytes;
 };
 
 /* Configuration specific to tunnels. */
