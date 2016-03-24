@@ -10,6 +10,12 @@
 #include <assert.h>
 #include "sflow_api.h"
 
+#ifdef OPS
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#endif
+
 static void resetSampleCollector(SFLReceiver *receiver);
 static void sendSample(SFLReceiver *receiver);
 static void sflError(SFLReceiver *receiver, char *errm);
@@ -50,6 +56,36 @@ void sfl_receiver_init(SFLReceiver *receiver, SFLAgent *agent)
     /* prepare to receive the first sample */
     resetSampleCollector(receiver);
 }
+
+#ifdef OPS
+/*_____________---------------------------------_______________
+  ____________ sfl_receiver_replaceAgentAddress _______________
+  -------------_________________________________---------------
+  Agent got new IP, update it in buffer containing samples.
+*/
+void sfl_receiver_replaceAgentAddress(SFLReceiver *receiver, SFLAddress *addr)
+{
+    u_int32_t   *ldatap = receiver->sampleCollector.data;
+
+    /* Agent IP is stored from byte 5 to 12 (for v4) or 5 to 24 (for v6) */
+
+    ldatap++;   /* first 4 bytes for sflow datagram version. */
+
+    if(addr->type == 0) {
+        *ldatap++ = htonl(SFLADDRESSTYPE_IP_V4);
+        *ldatap = 0;
+    }
+    else {
+        *ldatap++ = htonl(addr->type);
+        if(addr->type == SFLADDRESSTYPE_IP_V4) {
+            *ldatap = addr->address.ip_v4.addr;
+        }
+        else {
+            memcpy(ldatap, addr->address.ip_v6.addr, 16);
+        }
+    }
+}
+#endif
 
 /*_________________---------------------------__________________
   _________________      reset                __________________

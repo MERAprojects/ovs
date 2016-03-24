@@ -48,7 +48,11 @@ typedef struct _SFLAddress {
 
 #define SFL_DEFAULT_HEADER_SIZE 128
 #define SFL_DEFAULT_COLLECTOR_PORT 6343
+#ifdef OPS
+#define SFL_DEFAULT_SAMPLING_RATE 4096
+#else
 #define SFL_DEFAULT_SAMPLING_RATE 400
+#endif
 #define SFL_DEFAULT_POLLING_INTERVAL 30
 
 /* The header protocol describes the format of the sampled header */

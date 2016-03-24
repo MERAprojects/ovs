@@ -12,6 +12,7 @@ ovsofprotolibinclude_HEADERS = \
        ofproto/netflow.h \
        ofproto/ofproto.h \
        ofproto/ofproto-provider.h \
+       ofproto/collectors.h \
        ofproto/tunnel.h
 endif
 

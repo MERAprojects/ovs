@@ -157,6 +157,9 @@ typedef struct _SFLPoller {
     /* private fields */
     SFLReceiver *myReceiver;
     time_t countersCountdown;
+#ifdef OPS
+    time_t lastPolled;      /* time this poller was last polled */
+#endif
     u_int32_t countersSampleSeqNo;
 } SFLPoller;
 
@@ -259,6 +262,10 @@ SFLAddress *sfl_receiver_get_sFlowRcvrAddress(SFLReceiver *receiver);
 void        sfl_receiver_set_sFlowRcvrAddress(SFLReceiver *receiver, SFLAddress *sFlowRcvrAddress);
 u_int32_t   sfl_receiver_get_sFlowRcvrPort(SFLReceiver *receiver);
 void        sfl_receiver_set_sFlowRcvrPort(SFLReceiver *receiver, u_int32_t sFlowRcvrPort);
+#ifdef OPS
+void        sfl_receiver_replaceAgentAddress(SFLReceiver *receiver, SFLAddress *addr);
+#endif
+
 /* sampler */
 u_int32_t sfl_sampler_get_sFlowFsReceiver(SFLSampler *sampler);
 void      sfl_sampler_set_sFlowFsReceiver(SFLSampler *sampler, u_int32_t sFlowFsReceiver);
