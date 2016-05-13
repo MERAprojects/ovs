@@ -61,6 +61,7 @@ struct ovsdb_idl_column {
     bool mutable;
     void (*parse)(struct ovsdb_idl_row *, const struct ovsdb_datum *);
     void (*unparse)(struct ovsdb_idl_row *);
+    int (*compare)(const void *, const void *); /* Perform a comparison over ovsrec_* */
 #ifdef OPS
     unsigned int modify_seqno;
 #endif
@@ -89,6 +90,7 @@ struct ovsdb_idl_table {
     unsigned int delete_seqno;
 #endif
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
+    struct shash indexes;    /* Contains "struct ovsdb_idl_index"s */
     struct ovs_list track_list; /* Tracked rows (ovsdb_idl_row.track_node). */
 
     bool has_pending_fetch;  /* Indicates if the table has a pending fetch

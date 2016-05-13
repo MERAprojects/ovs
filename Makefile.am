@@ -93,6 +93,7 @@ docs = \
 	OPENFLOW-1.1+.md \
 	PORTING.md \
 	README.md \
+	README-compound-indexes.md \
 	README-lisp.md \
 	README-native-tunneling.md \
 	REPORTING-BUGS.md \

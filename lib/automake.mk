@@ -136,6 +136,8 @@ ovslibinclude_HEADERS = \
 	lib/shash.h \
 	lib/signals.h \
 	lib/simap.h \
+	lib/skiplist.c \
+	lib/skiplist.h \
 	lib/smap.h \
 	lib/socket-util.h \
 	lib/sort.h \
@@ -284,6 +286,8 @@ lib_libovscommon_la_SOURCES = \
         lib/shash.h \
         lib/simap.c \
         lib/simap.h \
+	lib/skiplist.c \
+	lib/skiplist.h \
         lib/smap.c \
         lib/smap.h \
         lib/socket-util.c \
