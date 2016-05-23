@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -200,7 +201,19 @@ bond_mode_from_string(enum bond_mode *balance, const char *s)
         *balance = BM_SLB;
     } else if (!strcmp(s, bond_mode_to_string(BM_AB))) {
         *balance = BM_AB;
-    } else {
+    }
+#ifdef OPS
+    else if (!strcmp(s, bond_mode_to_string(BM_L2_SRC_DST_HASH))) {
+        *balance = BM_L2_SRC_DST_HASH;
+    }
+    else if (!strcmp(s, bond_mode_to_string(BM_L3_SRC_DST_HASH))) {
+        *balance = BM_L3_SRC_DST_HASH;
+    }
+    else if (!strcmp(s, bond_mode_to_string(BM_L4_SRC_DST_HASH))) {
+        *balance = BM_L4_SRC_DST_HASH;
+    }
+#endif
+    else {
         return false;
     }
     return true;
@@ -216,6 +229,14 @@ bond_mode_to_string(enum bond_mode balance) {
         return "balance-slb";
     case BM_AB:
         return "active-backup";
+#ifdef OPS
+    case BM_L2_SRC_DST_HASH:
+        return "l2-src-dst-hash";
+    case BM_L3_SRC_DST_HASH:
+        return "l3-src-dst-hash";
+    case BM_L4_SRC_DST_HASH:
+        return "l4-src-dst-hash";
+#endif
     }
     OVS_NOT_REACHED();
 }
@@ -831,6 +852,15 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
          * bond slaves. */
         verdict = BV_DROP_IF_MOVED;
         goto out;
+
+#ifdef OPS
+        /* OPS doesn't use software based data path. So we will never reach
+         * this code path. Making this change to avoid compiler warnings. */
+    case BM_L4_SRC_DST_HASH:
+    case BM_L3_SRC_DST_HASH:
+    case BM_L2_SRC_DST_HASH:
+        goto out;
+#endif
     }
 
     OVS_NOT_REACHED();

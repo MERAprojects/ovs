@@ -78,6 +78,14 @@ AC_SUBST([LT_REVISION])
 LT_AGE=libopenvswitch_lt_age
 AC_SUBST([LT_AGE])
 
+LT_CONFIG_LTDL_DIR([libltdl])
+LTDL_INIT([subproject])
+
+AC_CHECK_HEADER([ltdl.h],
+    [AC_CHECK_LIB([ltdl], [lt_dladvise_init],
+        [LIBLTDL=-lltdl], [LIBLTDL=])],
+    [LIBLTDL=])
+
 AC_SEARCH_LIBS([pow], [m])
 AC_SEARCH_LIBS([clock_gettime], [rt])
 AC_SEARCH_LIBS([timer_create], [rt])
@@ -138,7 +146,7 @@ AC_CONFIG_FILES([
     ofproto/libofproto.sym
     lib/libsflow.sym
     lib/libopenvswitch.sym
-    ovn/lib/libovn.sym
+    lib/libovscommon.sym
     vtep/libvtep.sym])
 
 OVS_ENABLE_OPTION([-Wall])
@@ -166,9 +174,18 @@ AC_ARG_VAR(KARCH, [Kernel Architecture String])
 AC_SUBST(KARCH)
 OVS_CHECK_LINUX
 OVS_CHECK_DPDK
+OVS_CHECK_SIMULATOR_PROVIDER
+AC_SUBST([OPS_BUILD])
+AM_CONDITIONAL([OPS], [test "$OPS_BUILD" = "1" || test "x$enable_simulator_provider" = "xyes"])
+AC_SUBST([BUILD_OVS_VSWITCHD])
+AM_CONDITIONAL([OVS_VSWITCHD], [test "$BUILD_OVS_VSWITCHD" = "1"])
 OVS_CHECK_PRAGMA_MESSAGE
 AC_SUBST([OVS_CFLAGS])
 AC_SUBST([OVS_LDFLAGS])
+
+PKG_CHECK_MODULES([YAML], [yaml-0.1])
+AC_SUBST([YAML_CFLAGS])
+AC_SUBST([YAML_LDFLAGS])
 
 AC_CONFIG_FILES(Makefile)
 AC_CONFIG_FILES(datapath/Makefile)
@@ -176,6 +193,7 @@ AC_CONFIG_FILES(datapath/linux/Kbuild)
 AC_CONFIG_FILES(datapath/linux/Makefile)
 AC_CONFIG_FILES(datapath/linux/Makefile.main)
 AC_CONFIG_FILES(tests/atlocal)
+AC_CONFIG_FILES(lib/libovscommon.pc)
 AC_CONFIG_FILES(lib/libopenvswitch.pc)
 AC_CONFIG_FILES(lib/libsflow.pc)
 AC_CONFIG_FILES(ofproto/libofproto.pc)

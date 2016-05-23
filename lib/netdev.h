@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -156,6 +157,10 @@ void netdev_parse_name(const char *netdev_name, char **name, char **type);
 /* Options. */
 int netdev_set_config(struct netdev *, const struct smap *args, char **errp);
 int netdev_get_config(const struct netdev *, struct smap *);
+#ifdef OPS
+int netdev_set_hw_intf_info(struct netdev *, const struct smap *args);
+int netdev_set_hw_intf_config(struct netdev *, const struct smap *args);
+#endif
 const struct netdev_tunnel_config *
     netdev_get_tunnel_config(const struct netdev *);
 int netdev_get_numa_id(const struct netdev *);

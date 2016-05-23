@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2008, 2009, 2010 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,4 +58,8 @@ void ovs_cmdl_proctitle_set(const char *, ...)
 #endif
 void ovs_cmdl_proctitle_restore(void);
 
+#ifdef OPS
+#define long_options_to_short_options ovs_cmdl_long_options_to_short_options
+#define proctitle_init ovs_cmdl_proctitle_init
+#endif
 #endif /* command-line.h */

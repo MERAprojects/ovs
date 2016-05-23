@@ -1,4 +1,8 @@
+if OPS
+openflowincludedir = $(includedir)/ovs/openflow
+else
 openflowincludedir = $(includedir)/openflow
+endif
 openflowinclude_HEADERS = \
 	include/openflow/netronome-ext.h \
 	include/openflow/nicira-ext.h \

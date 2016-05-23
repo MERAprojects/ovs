@@ -38,7 +38,7 @@ struct vlandev_class {
     int (*vd_del)(const char *vlan_dev);
 };
 
-#ifdef __linux__
+#if defined ( __linux__) && ! defined (OPS_TEMP)
 static const struct vlandev_class vlandev_linux_class;
 #endif
 static const struct vlandev_class vlandev_stub_class;
@@ -61,7 +61,7 @@ static const struct vlandev_class *
 vlandev_get_class(void)
 {
     if (!vd_class) {
-#if __linux__
+#if defined ( __linux__) && ! defined (OPS_TEMP)
         vd_class = &vlandev_linux_class;
 #else
         vd_class = &vlandev_stub_class;
@@ -161,7 +161,7 @@ vlandev_get_name(const char *real_dev_name, int vid)
 
 /* The Linux vlandev implementation. */
 
-#ifdef __linux__
+#if defined ( __linux__) && ! defined (OPS_TEMP)
 #include "rtnetlink.h"
 #include <linux/if_vlan.h>
 #include <linux/sockios.h>

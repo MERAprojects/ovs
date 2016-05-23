@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,6 +58,7 @@
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif_netlink);
+#ifndef OPS_TEMP
 #ifdef _WIN32
 enum { WINDOWS = 1 };
 #else
@@ -2988,3 +2990,4 @@ report_loss(struct dpif_netlink *dpif, struct dpif_channel *ch, uint32_t ch_idx,
               dpif_name(&dpif->dpif), ch_idx, handler_id);
     ds_destroy(&s);
 }
+#endif

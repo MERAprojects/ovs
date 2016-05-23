@@ -40,7 +40,7 @@ struct dpif_sflow_actions {
     struct flow_tnl tunnel;  /* Egress tunnel push/set. */
     uint8_t tunnel_ipproto;  /* Tunnel push action can set ipproto. */
     bool tunnel_err;         /* Tunnel actions parse failure. */
-    
+
     /* Using host-byte order for the mpls stack here
        to match the expectations of the sFlow library. Also
        the ordering is reversed, so that the entry at offset 0

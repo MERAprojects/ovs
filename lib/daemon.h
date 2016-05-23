@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,7 +134,11 @@ void set_pipe_handle(const char *pipe_handle);
 bool get_detach(void);
 void daemon_save_fd(int fd);
 void daemonize(void);
+#ifdef OPS
+void daemonize_start(void);
+#else
 void daemonize_start(bool access_datapath);
+#endif
 void daemonize_complete(void);
 void daemon_set_new_user(const char * user_spec);
 void daemon_become_new_user(bool access_datapath);

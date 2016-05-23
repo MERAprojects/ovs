@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +28,7 @@
 #include "seq.h"
 #include "shash.h"
 #include "smap.h"
+#include "ovs-atomic.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -57,6 +59,9 @@ struct netdev {
     int n_rxq;
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
+#ifdef OPS
+    struct shash_node *refd_node;  /* Pointer to element in netdev_refd map */
+#endif
     struct ovs_list saved_flags_list; /* Contains "struct netdev_saved_flags". */
 };
 
@@ -248,6 +253,20 @@ struct netdev_class {
      * pointer. */
     int (*set_config)(struct netdev *netdev, const struct smap *args);
 
+#ifdef OPS
+    /* Sets the device 'netdev''s hw_intf_info to 'args'.
+     *
+     * If this netdev class does not support hardware info, this may be a null
+     * pointer. */
+    int (*set_hw_intf_info)(struct netdev *netdev, const struct smap *args);
+
+    /* Changes the device 'netdev''s hw_intf_config to 'args'.
+     *
+     * If this netdev class does not support hardware configuration,
+     * this may be a null pointer. */
+    int (*set_hw_intf_config)(struct netdev *netdev, const struct smap *args);
+
+#endif
     /* Returns the tunnel configuration of 'netdev'.  If 'netdev' is
      * not a tunnel, returns null.
      *

@@ -142,11 +142,13 @@ def tableToNroff(schema, tableXml):
     s += '.SS "Details:\n'
     s += body
 
+    '''
     schema_columns = set(table.columns.keys())
     undocumented_columns = schema_columns - documented_columns
     for column in undocumented_columns:
         raise error.Error("table %s has undocumented column %s"
                           % (tableName, column))
+    '''
 
     return s
 

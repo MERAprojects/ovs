@@ -49,13 +49,14 @@
 /configure-stamp
 /depcomp
 /distfiles
-/dist-docs
 /install-sh
 /libtool
 /manpage-check
 /missing
 /missing-distfiles
 /package.m4
+/m4/ltargz.m4
+/m4/ltdl.m4
 /stamp-h1
 /_build-gcc
 /_build-clang
@@ -67,4 +68,5 @@ _debian
 odp-netlink.h
 OvsDpInterface.h
 /.vagrant/
-testsuite.tmp.orig
+/build
+/libltdl/

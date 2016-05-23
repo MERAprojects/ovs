@@ -21,9 +21,7 @@ def annotateSchema(schemaFile, annotationFile):
     sys.stdout.write('\n')
 
 def constify(cType, const):
-    if (const
-        and cType.endswith('*') and
-        (cType == 'char **' or not cType.endswith('**'))):
+    if (const and cType.endswith('*') and not cType.endswith('**')):
         return 'const %s' % cType
     else:
         return cType
@@ -120,6 +118,7 @@ def cMembers(prefix, tableName, columnName, column, const):
 def printCIDLHeader(schemaFile):
     schema = parseSchema(schemaFile)
     prefix = schema.idlPrefix
+    aliases = schema.idlTableAliases
     print '''\
 /* Generated automatically -- do not modify!    -*- buffer-read-only: t -*- */
 
@@ -134,8 +133,30 @@ def printCIDLHeader(schemaFile):
 #include "smap.h"
 #include "uuid.h"''' % {'prefix': prefix.upper()}
 
+
+    print '''\n\
+#define %(prefix)sIDL_ANY_TABLE_ROWS_INSERTED(ovsrec_row_struct, my_seqno)    \
+                    (ovsrec_row_struct->header_.table->insert_seqno > my_seqno)
+#define %(prefix)sIDL_ANY_TABLE_ROWS_MODIFIED(ovsrec_row_struct, my_seqno)    \
+                    (ovsrec_row_struct->header_.table->modify_seqno > my_seqno)
+#define %(prefix)sIDL_ANY_TABLE_ROWS_DELETED(ovsrec_row_struct, my_seqno)     \
+                    (ovsrec_row_struct->header_.table->delete_seqno > my_seqno)
+#define %(prefix)sIDL_IS_ROW_INSERTED(ovsrec_row_struct, my_seqno)            \
+                           (ovsrec_row_struct->header_.insert_seqno > my_seqno)
+#define %(prefix)sIDL_IS_ROW_MODIFIED(ovsrec_row_struct, my_seqno)            \
+                           (ovsrec_row_struct->header_.modify_seqno > my_seqno)
+#define %(prefix)sIDL_IS_COLUMN_MODIFIED(ovsrec_col_struct, my_seqno)         \
+                               (ovsrec_col_struct.modify_seqno > my_seqno)'''\
+                               % {'prefix': prefix.upper()}
+
     for tableName, table in sorted(schema.tables.iteritems()):
         structName = "%s%s" % (prefix, tableName.lower())
+
+        structNameAlias = None
+        for alias in aliases or []:
+            if tableName.lower() == alias["target"].lower():
+                structNameAlias = "%s%s" % (prefix, alias["name"].lower())
+                break
 
         print ""
         print "/* %s table. */" % tableName
@@ -149,10 +170,35 @@ def printCIDLHeader(schemaFile):
                 print "\t%(type)s%(name)s;%(comment)s" % member
         print "};"
 
+        if structNameAlias:
+            print
+            print "#define %s %s" % (structNameAlias, structName)
+
+        # Enum constants
+        for columnName, column in sorted(table.columns.iteritems()):
+            const_prefix = "#define %s_%s" % (structName.upper(), columnName.upper())
+            enum_str = column.type.cEnumConst(const_prefix)
+            if enum_str is not None:
+                print '\n'+enum_str
+
+            type_prefix = "%s_%s" % (structName.upper(), columnName.upper())
+            enum_prefix = "%s_%s" % (tableName.upper(), columnName.upper())
+            enum_members = column.type.cEnumType(enum_prefix)
+            if enum_members is not None:
+                printEnum(type_prefix.lower(), enum_members)
+
         # Column indexes.
-        printEnum(["%s_COL_%s" % (structName.upper(), columnName.upper())
+        printEnum("%s_column_id" % structName.lower(), ["%s_COL_%s" % (structName.upper(), columnName.upper())
                    for columnName in sorted(table.columns)]
                   + ["%s_N_COLUMNS" % structName.upper()])
+
+        if structNameAlias:
+            print
+            for columnName in sorted(table.columns):
+                print "#define %s_COL_%s %s_COL_%s" % (structNameAlias.upper(),
+                                                       columnName.upper(),
+                                                       structName.upper(),
+                                                       columnName.upper())
 
         print
         for columnName in table.columns:
@@ -161,6 +207,14 @@ def printCIDLHeader(schemaFile):
                 'S': structName.upper(),
                 'c': columnName,
                 'C': columnName.upper()}
+
+        if structNameAlias:
+            print
+            for columnName in sorted(table.columns):
+                print "#define %s_col_%s %s_col_%s" % (structNameAlias.lower(),
+                                                       columnName.lower(),
+                                                       structName.lower(),
+                                                       columnName.lower())
 
         print "\nextern struct ovsdb_idl_column %s_columns[%s_N_COLUMNS];" % (structName, structName.upper())
 
@@ -191,8 +245,24 @@ void %(s)s_delete(const struct %(s)s *);
 struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
 ''' % {'s': structName, 'S': structName.upper()}
 
+        if structNameAlias:
+            for func in ["columns", "get_for_uuid", "first", "next",
+                         "init", "delete", "insert"]:
+                print "#define %s_%s %s_%s" % (structNameAlias.lower(), func,
+                                               structName.lower(), func)
+            for func in ["FOR_EACH", "FOR_EACH_SAFE"]:
+                print "#define %s_%s %s_%s" % (structNameAlias.upper(), func,
+                                               structName.upper(), func)
+            print
+
         for columnName, column in sorted(table.columns.iteritems()):
             print 'void %(s)s_verify_%(c)s(const struct %(s)s *);' % {'s': structName, 'c': columnName}
+
+        if structNameAlias:
+            print
+            for columnName, column in sorted(table.columns.iteritems()):
+                print "#define %s_verify_%s %s_verify_%s" % (structNameAlias.lower(), columnName,
+                                                             structName.lower(), columnName)
 
         print
         for columnName, column in sorted(table.columns.iteritems()):
@@ -202,6 +272,12 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
                 valueParam = ''
             print 'const struct ovsdb_datum *%(s)s_get_%(c)s(const struct %(s)s *, enum ovsdb_atomic_type key_type%(v)s);' % {
                 's': structName, 'c': columnName, 'v': valueParam}
+
+        if structNameAlias:
+            print
+            for columnName, column in sorted(table.columns.iteritems()):
+                print "#define %s_get_%s %s_get_%s" % (structNameAlias.lower(), columnName,
+                                                             structName.lower(), columnName)
 
         print
         for columnName, column in sorted(table.columns.iteritems()):
@@ -214,10 +290,16 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
                 args = ['%(type)s%(name)s' % member for member in members]
             print '%s);' % ', '.join(args)
 
+        if structNameAlias:
+            print
+            for columnName, column in sorted(table.columns.iteritems()):
+                print "#define %s_set_%s %s_set_%s" % (structNameAlias.lower(), columnName,
+                                                             structName.lower(), columnName)
+
         print
 
     # Table indexes.
-    printEnum(["%sTABLE_%s" % (prefix.upper(), tableName.upper()) for tableName in sorted(schema.tables)] + ["%sN_TABLES" % prefix.upper()])
+    printEnum("%stable_id" % prefix.lower(), ["%sTABLE_%s" % (prefix.upper(), tableName.upper()) for tableName in sorted(schema.tables)] + ["%sN_TABLES" % prefix.upper()])
     print
     for tableName in schema.tables:
         print "#define %(p)stable_%(t)s (%(p)stable_classes[%(P)sTABLE_%(T)s])" % {
@@ -225,6 +307,12 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
             'P': prefix.upper(),
             't': tableName.lower(),
             'T': tableName.upper()}
+
+        for alias in aliases or []:
+            if tableName.lower() == alias["target"].lower():
+                print "#define %stable_%s %stable_%s" % (prefix, alias["name"], prefix, alias["target"])
+                break
+
     print "\nextern struct ovsdb_idl_table_class %stable_classes[%sN_TABLES];" % (prefix, prefix.upper())
 
     print "\nextern struct ovsdb_idl_class %sidl_class;" % prefix
@@ -233,15 +321,16 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
     print "\nconst char * %sget_db_version(void);" % prefix
     print "\n#endif /* %(prefix)sIDL_HEADER */" % {'prefix': prefix.upper()}
 
-def printEnum(members):
+def printEnum(type, members):
     if len(members) == 0:
         return
 
-    print "\nenum {";
+    print "\nenum %s {" % type
     for member in members[:-1]:
         print "    %s," % member
     print "    %s" % members[-1]
     print "};"
+    print "#define %s_e %s" % (type, type)
 
 def printCIDLSource(schemaFile):
     schema = parseSchema(schemaFile)
@@ -375,7 +464,7 @@ static void
                 if valueVar:
                     # Special case for boolean types (see above).
                     if type.value.type == ovs.db.types.BooleanType:
-                        sizeof = " * sizeof_bool"
+                        sizeof = "sizeof_bool"
                     else:
                         sizeof = "sizeof *%s" % valueVar
                     print "%s    %s = xmalloc(%s * %s);" % (indent, valueVar,

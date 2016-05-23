@@ -42,4 +42,3 @@ OVN_NB_IDL_FILES = \
 ovn/lib/ovn-nb-idl.ovsidl: $(OVN_NB_IDL_FILES)
 	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(OVN_NB_IDL_FILES) > $@.tmp && \
 	mv $@.tmp $@
-

@@ -1,4 +1,5 @@
 /* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +37,10 @@ struct ovsdb_idl_row {
     unsigned long int *prereqs; /* Bitmap of columns to verify in "old". */
     unsigned long int *written; /* Bitmap of columns from "new" to write. */
     struct hmap_node txn_node;  /* Node in ovsdb_idl_txn's list. */
+#ifdef OPS
+    unsigned int insert_seqno;
+    unsigned int modify_seqno;
+#endif
 
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
     struct ovs_list track_node;
@@ -47,6 +52,9 @@ struct ovsdb_idl_column {
     bool mutable;
     void (*parse)(struct ovsdb_idl_row *, const struct ovsdb_datum *);
     void (*unparse)(struct ovsdb_idl_row *);
+#ifdef OPS
+    unsigned int modify_seqno;
+#endif
 };
 
 struct ovsdb_idl_table_class {
@@ -66,6 +74,11 @@ struct ovsdb_idl_table {
     struct shash columns;    /* Contains "const struct ovsdb_idl_column *"s. */
     struct hmap rows;        /* Contains "struct ovsdb_idl_row"s. */
     struct ovsdb_idl *idl;   /* Containing idl. */
+#ifdef OPS
+    unsigned int insert_seqno;
+    unsigned int modify_seqno;
+    unsigned int delete_seqno;
+#endif
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
     struct ovs_list track_list; /* Tracked rows (ovsdb_idl_row.track_node). */
 };

@@ -106,7 +106,7 @@ as() {
             echo >&2 "$FUNCNAME: missing arguments (use --help for help)"
             return 1
 	    ;;
-	1) 
+        1)
 	    if test "$1" != --help; then
 		sim_setvars $1
 	    else

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -5791,6 +5792,10 @@ const struct ofproto_class ofproto_dpif_class = {
     set_queues,
     bundle_set,
     bundle_remove,
+#ifdef OPS
+    NULL,                       /* bundle_get */
+    NULL,                       /* set_vlan */
+#endif
     mirror_set__,
     mirror_get_stats__,
     set_flood_vlans,
@@ -5811,4 +5816,12 @@ const struct ofproto_class ofproto_dpif_class = {
     group_modify,               /* group_modify */
     group_get_stats,            /* group_get_stats */
     get_datapath_version,       /* get_datapath_version */
+#ifdef OPS
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+#endif
 };

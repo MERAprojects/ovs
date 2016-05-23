@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -136,6 +137,10 @@ struct ofproto {
     struct hmap groups OVS_GUARDED;   /* Contains "struct ofgroup"s. */
     uint32_t n_groups[4] OVS_GUARDED; /* # of existing groups of each type. */
     struct ofputil_group_features ogf;
+#ifdef OPS
+    /* VLAN support. */
+    unsigned long int *vlans_bmp;  /* Bitmap of all configured VLANs. */
+#endif
 };
 
 void ofproto_init_tables(struct ofproto *, int n_tables);
@@ -1597,6 +1602,20 @@ struct ofproto_class {
      * one port, deconfigures the bundle's bonding configuration. */
     void (*bundle_remove)(struct ofport *ofport);
 
+#ifdef OPS
+    /* Retrieves information about bundle on 'ofproto'.
+     *
+     * Stores bundle information for 'ofproto' in 'bundle_handle'. */
+    int (*bundle_get)(struct ofproto *ofproto, void *aux, int *bundle_handle);
+
+    /* Configures VLANs.
+     *
+     * This function affects only the behavior of the OFPP_NORMAL action.  An
+     * implementation that does not support it may set it to NULL or return
+     * EOPNOTSUPP. */
+    int (*set_vlan)(struct ofproto *ofproto, int vid, bool add);
+#endif
+
     /* If 's' is nonnull, this function registers a mirror associated with
      * client data pointer 'aux' in 'ofproto'.  A mirror is the same concept as
      * a Mirror in OVSDB.  If 'aux' is already registered then this function
@@ -1764,6 +1783,34 @@ struct ofproto_class {
      * This function should be NULL if an implementation does not support it.
      */
     const char *(*get_datapath_version)(const struct ofproto *);
+
+#ifdef OPS
+    /* Add L3 host entry. */
+    int (*add_l3_host_entry)(const struct ofproto *ofproto, void *aux,
+                             bool is_ipv6_addr, char *ip_addr,
+                             char *next_hop_mac_addr, int *l3_egress_id);
+
+    /* Delete L3 host entry. */
+    int (*delete_l3_host_entry)(const struct ofproto *ofproto, void *aux,
+                                bool is_ipv6_addr, char *ip_addr,
+                                int *l3_egress_id);
+
+    /* Get L3 host hit bit. */
+    int (*get_l3_host_hit)(const struct ofproto *ofproto, void *aux,
+                           bool is_ipv6_addr, char *ip_addr, bool *hit_bit);
+
+    /* Add/Delete/Modify routes */
+    int (*l3_route_action)(const struct ofproto *ofproto,
+                           enum ofproto_route_action action,
+                           struct ofproto_route *route);
+
+    /* Enable/Disable ECMP */
+    int (*l3_ecmp_set)(const struct ofproto *ofproto, bool enable);
+
+    /* Enable/Disable ECMP hash config */
+    int (*l3_ecmp_hash_set)(const struct ofproto *ofproto, unsigned int hash,
+                            bool enable);
+#endif
 };
 
 extern const struct ofproto_class ofproto_dpif_class;

@@ -17,10 +17,10 @@ set -o xtrace
 
 ovn-nbctl lswitch-add sw0
 ovn-nbctl lswitch-add sw1
-ovn-nbctl lport-add sw0 sw0-port1 
-ovn-nbctl lport-add sw0 sw0-port2 
-ovn-nbctl lport-add sw1 sw1-port1 
-ovn-nbctl lport-add sw1 sw1-port2 
+ovn-nbctl lport-add sw0 sw0-port1
+ovn-nbctl lport-add sw0 sw0-port2
+ovn-nbctl lport-add sw1 sw1-port1
+ovn-nbctl lport-add sw1 sw1-port2
 ovn-nbctl lport-set-addresses sw0-port1 00:00:00:00:00:01
 ovn-nbctl lport-set-addresses sw0-port2 00:00:00:00:00:02
 ovn-nbctl lport-set-addresses sw1-port1 00:00:00:00:00:03

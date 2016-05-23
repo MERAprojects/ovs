@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2008, 2009, 2010, 2011, 2014 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +33,14 @@ enum lacp_status;
 enum bond_mode {
     BM_TCP, /* Transport Layer Load Balance. */
     BM_SLB, /* Source Load Balance. */
+#ifdef OPS
+    BM_AB,               /* Active Backup. */
+    BM_L2_SRC_DST_HASH,  /* Layer 2 Src and Dest Mac Hash */
+    BM_L3_SRC_DST_HASH,  /* Layer 3 Src and Dest IP Hash */
+    BM_L4_SRC_DST_HASH   /* Layer 4 Src and Dest IP Hash */
+#else
     BM_AB   /* Active Backup. */
+#endif
 };
 
 bool bond_mode_from_string(enum bond_mode *, const char *);

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2011, 2013, 2014 Gaetano Catalli.
  * Copyright (c) 2013, 2014 YAMAMOTO Takashi.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1557,6 +1558,10 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
     netdev_bsd_dealloc,                              \
     NULL, /* get_config */                           \
     NULL, /* set_config */                           \
+#ifdef OPS
+    NULL, /* set_hw_intf_info */                     \
+    NULL, /* set_hw_intf_config */                   \
+#endif
     NULL, /* get_tunnel_config */                    \
     NULL, /* build header */                         \
     NULL, /* push header */                          \

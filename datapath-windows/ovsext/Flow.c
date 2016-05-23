@@ -485,7 +485,7 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         /* Get tunnel keys attributes */
         if ((NlAttrParseNested(nlMsgHdr, tunnelKeyAttrOffset,
                                NlAttrLen(keyAttrs[OVS_KEY_ATTR_TUNNEL]),
-                               nlFlowTunnelKeyPolicy, 
+                               nlFlowTunnelKeyPolicy,
                                ARRAY_SIZE(nlFlowTunnelKeyPolicy),
                                tunnelAttrs, ARRAY_SIZE(tunnelAttrs)))
                                != TRUE) {

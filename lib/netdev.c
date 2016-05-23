@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,6 +67,14 @@ static struct ovs_mutex netdev_mutex = OVS_MUTEX_INITIALIZER;
 /* All created network devices. */
 static struct shash netdev_shash OVS_GUARDED_BY(netdev_mutex)
     = SHASH_INITIALIZER(&netdev_shash);
+
+#ifdef OPS
+/* Contains alls netdevs, even those that are "netdev_remove"d, but are
+ * still not unrefed and freed. Allows netdev_open to resurrect those netdevs
+ * avoiding creation of duplicates */
+static struct shash netdev_refd_shash OVS_GUARDED_BY(netdev_mutex)
+    = SHASH_INITIALIZER(&netdev_refd_shash);
+#endif
 
 /* Protects 'netdev_classes' against insertions or deletions.
  *
@@ -139,12 +148,13 @@ netdev_initialize(void)
         fatal_signal_add_hook(restore_all_flags, NULL, NULL, true);
         netdev_vport_patch_register();
 
-#ifdef __linux__
+#if defined (__linux__) && ! defined (OPS_TEMP)
         netdev_register_provider(&netdev_linux_class);
         netdev_register_provider(&netdev_internal_class);
         netdev_register_provider(&netdev_tap_class);
         netdev_vport_tunnel_register();
 #endif
+#ifndef OPS_TEMP
 #if defined(__FreeBSD__) || defined(__NetBSD__)
         netdev_register_provider(&netdev_tap_class);
         netdev_register_provider(&netdev_bsd_class);
@@ -155,7 +165,7 @@ netdev_initialize(void)
         netdev_vport_tunnel_register();
 #endif
         netdev_dpdk_register();
-
+#endif
         ovsthread_once_done(&once);
     }
 }
@@ -363,6 +373,11 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
     if (!netdev) {
         struct netdev_registered_class *rc;
 
+#ifdef OPS
+        /* may be netdev was "netdev_remove"d, but still exists */
+        netdev = shash_find_data(&netdev_refd_shash, name);
+        if (!netdev) {
+#endif
         rc = netdev_lookup_class(type && type[0] ? type : "system");
         if (rc) {
             netdev = rc->class->alloc();
@@ -373,6 +388,9 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                 netdev->change_seq = 1;
                 netdev->node = shash_add(&netdev_shash, name, netdev);
 
+#ifdef OPS
+                    netdev->refd_node = shash_add(&netdev_refd_shash, name, netdev);
+#endif
                 /* By default enable one tx and rx queue per netdev. */
                 netdev->n_txq = netdev->netdev_class->send ? 1 : 0;
                 netdev->n_rxq = netdev->netdev_class->rxq_alloc ? 1 : 0;
@@ -387,6 +405,9 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                     free(netdev->name);
                     ovs_assert(list_is_empty(&netdev->saved_flags_list));
                     shash_delete(&netdev_shash, netdev->node);
+#ifdef OPS
+                        shash_delete(&netdev_refd_shash, netdev->refd_node);
+#endif
                     rc->class->dealloc(netdev);
                 }
             } else {
@@ -397,6 +418,13 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                       name, type);
             error = EAFNOSUPPORT;
         }
+#ifdef OPS
+        } else {
+            /* netdev is resurrected after it was previously "netdev_remove"d */
+            netdev->node = shash_add(&netdev_shash, name, netdev);
+            error = 0;
+        }
+#endif
     } else {
         error = 0;
     }
@@ -454,6 +482,52 @@ netdev_set_config(struct netdev *netdev, const struct smap *args, char **errp)
     return 0;
 }
 
+#ifdef OPS
+int
+netdev_set_hw_intf_info(struct netdev *netdev, const struct smap *args)
+    OVS_EXCLUDED(netdev_mutex)
+{
+    if (netdev->netdev_class->set_hw_intf_info) {
+        const struct smap no_args = SMAP_INITIALIZER(&no_args);
+        int error;
+
+        error = netdev->netdev_class->set_hw_intf_info(netdev,
+                                                       args ? args : &no_args);
+        if (error) {
+            VLOG_WARN("%s: could not set hardware info (%s)",
+                      netdev_get_name(netdev), ovs_strerror(error));
+        }
+        return error;
+    } else if (args && !smap_is_empty(args)) {
+        VLOG_WARN("%s: arguments provided to device that doesn't support hardware info",
+                  netdev_get_name(netdev));
+    }
+    return 0;
+}
+
+int
+netdev_set_hw_intf_config(struct netdev *netdev, const struct smap *args)
+    OVS_EXCLUDED(netdev_mutex)
+{
+    if (netdev->netdev_class->set_hw_intf_config) {
+        const struct smap no_args = SMAP_INITIALIZER(&no_args);
+        int error;
+
+        error = netdev->netdev_class->set_hw_intf_config(netdev,
+                                                         args ? args : &no_args);
+        if (error) {
+            VLOG_WARN("%s: could not set hardware config (%s)",
+                      netdev_get_name(netdev), ovs_strerror(error));
+        }
+        return error;
+    } else if (args && !smap_is_empty(args)) {
+        VLOG_WARN("%s: arguments provided to device that doesn't support hardware config",
+                  netdev_get_name(netdev));
+    }
+    return 0;
+}
+
+#endif
 /* Returns the current configuration for 'netdev' in 'args'.  The caller must
  * have already initialized 'args' with smap_init().  Returns 0 on success, in
  * which case 'args' will be filled with 'netdev''s configuration.  On failure
@@ -517,6 +591,13 @@ netdev_unref(struct netdev *dev)
         if (dev->node) {
             shash_delete(&netdev_shash, dev->node);
         }
+
+#ifdef OPS
+        if (dev->refd_node) {
+            shash_delete(&netdev_refd_shash, dev->refd_node);
+        }
+#endif
+
         free(dev->name);
         dev->netdev_class->dealloc(dev);
         ovs_mutex_unlock(&netdev_mutex);
@@ -1155,9 +1236,21 @@ do_update_flags(struct netdev *netdev, enum netdev_flags off,
     error = netdev->netdev_class->update_flags(netdev, off & ~on, on,
                                                &old_flags);
     if (error) {
+#ifdef OPS
+        if (error == EOPNOTSUPP) {
+            VLOG_DBG_RL(&rl, "%s flags for network device %s: %s not supported",
+                         off || on ? "set" : "get", netdev_get_name(netdev),
+                         ovs_strerror(error));
+        } else {
+            VLOG_WARN_RL(&rl, "failed to %s flags for network device %s: %s",
+                         off || on ? "set" : "get", netdev_get_name(netdev),
+                         ovs_strerror(error));
+        }
+#else
         VLOG_WARN_RL(&rl, "failed to %s flags for network device %s: %s",
                      off || on ? "set" : "get", netdev_get_name(netdev),
                      ovs_strerror(error));
+#endif
         old_flags = 0;
     } else if ((off || on) && sfp) {
         enum netdev_flags new_flags = (old_flags & ~off) | on;

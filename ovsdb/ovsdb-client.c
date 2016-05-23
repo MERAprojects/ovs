@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -128,6 +129,10 @@ main(int argc, char *argv[])
         if (argc - optind > command->min_args
             && svec_contains(&dbs, argv[optind])) {
             database = argv[optind++];
+#ifdef OPS
+        } else if (svec_contains(&dbs, "OpenSwitch")) {
+            database = "OpenSwitch";
+#endif
         } else if (dbs.n == 1) {
             database = xstrdup(dbs.names[0]);
         } else if (svec_contains(&dbs, "Open_vSwitch")) {
@@ -792,7 +797,11 @@ do_monitor(struct jsonrpc *rpc, const char *database,
     size_t n_mts, allocated_mts;
 
     daemon_save_fd(STDOUT_FILENO);
+#ifdef OPS
+    daemonize_start();
+#else
     daemonize_start(false);
+#endif
     if (get_detach()) {
         int error;
 

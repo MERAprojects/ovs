@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,12 +33,17 @@
 #include "openvswitch/vlog.h"
 #include "hmap.h"
 #include "hash.h"
+#ifdef OPS
+#include "poll-loop.h"
+#endif
 
 VLOG_DEFINE_THIS_MODULE(poll_loop);
 
 COVERAGE_DEFINE(poll_create_node);
 COVERAGE_DEFINE(poll_zero_timeout);
 
+
+#ifndef OPS
 struct poll_node {
     struct hmap_node hmap_node;
     struct pollfd pollfd;       /* Events to pass to time_poll(). */
@@ -54,8 +60,11 @@ struct poll_loop {
     long long int timeout_when; /* In msecs as returned by time_msec(). */
     const char *timeout_where;  /* Where 'timeout_when' was set. */
 };
+#endif
 
+#ifndef OPS
 static struct poll_loop *poll_loop(void);
+#endif
 
 /* Look up the node with same fd or wevent. */
 static struct poll_node *
@@ -295,7 +304,11 @@ log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
     ds_destroy(&s);
 }
 
+#ifdef OPS
+void
+#else
 static void
+#endif
 free_poll_nodes(struct poll_loop *loop)
 {
     struct poll_node *node, *next;
@@ -400,7 +413,11 @@ free_poll_loop(void *loop_)
     free(loop);
 }
 
+#ifdef OPS
+struct poll_loop *
+#else
 static struct poll_loop *
+#endif
 poll_loop(void)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;

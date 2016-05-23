@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,6 +49,12 @@ VLOG_DEFINE_THIS_MODULE(socket_util_unix);
 /* Maximum length of the sun_path member in a struct sockaddr_un, excluding
  * space for a null terminator. */
 #define MAX_UN_LEN (sizeof(((struct sockaddr_un *) 0)->sun_path) - 1)
+
+#ifdef OPS
+/* Group-ID of "ovsdb_users" group */
+#define OVSDB_USERS_GROUP_ID 1020
+#endif /* OPS */
+
 
 void
 xpipe(int fds[2])
@@ -346,6 +353,16 @@ make_unix_socket(int style, bool nonblock,
         error = make_sockaddr_un(bind_path, &un, &un_len, &dirfd, linkname);
         if (!error) {
             error = bind_unix_socket(fd, (struct sockaddr *) &un, un_len);
+#ifdef OPS
+            if(0 != chmod(bind_path, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP))
+            {
+              VLOG_ERR("\nError while changing mode of socket file - %s.\n", bind_path);
+            }
+            if(0 != chown(bind_path, -1, OVSDB_USERS_GROUP_ID))
+            {
+              VLOG_ERR("\nError while changing group of socket file - %s.\n", bind_path);
+            }
+#endif /* OPS */
         }
         free_sockaddr_un(dirfd, linkname);
 

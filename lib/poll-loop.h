@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +36,9 @@
 
 #include <poll.h>
 #include "util.h"
+#ifdef OPS
+#include "hmap.h"
+#endif
 
 #ifdef  __cplusplus
 extern "C" {
@@ -69,6 +73,31 @@ void poll_immediate_wake_at(const char *where);
 
 /* Wait until an event occurs. */
 void poll_block(void);
+
+#ifdef OPS
+struct poll_node {
+    struct hmap_node hmap_node;
+    struct pollfd pollfd;       /* Events to pass to time_poll(). */
+    HANDLE wevent;              /* Events for WaitForMultipleObjects(). */
+    const char *where;          /* Where poll_node was created. */
+
+    void *event;                /* placeholder for exporting events
+                                   to a foreign poll mechanism */
+};
+
+struct poll_loop {
+    /* All active poll waiters. */
+    struct hmap poll_nodes;
+
+    /* Time at which to wake up the next call to poll_block(), LLONG_MIN to
+     * wake up immediately, or LLONG_MAX to wait forever. */
+    long long int timeout_when; /* In msecs as returned by time_msec(). */
+    const char *timeout_where;  /* Where 'timeout_when' was set. */
+};
+
+struct poll_loop *poll_loop(void);
+void free_poll_nodes(struct poll_loop *loop);
+#endif
 
 #ifdef  __cplusplus
 }

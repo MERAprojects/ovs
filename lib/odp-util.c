@@ -510,7 +510,7 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
                       gnh->oam ? "oam," : "",
                       gnh->critical ? "crit," : "",
                       ntohl(get_16aligned_be32(&gnh->vni)) >> 8);
- 
+
         if (gnh->opt_len) {
             ds_put_cstr(ds, ",options(");
             format_geneve_opts(gnh->options, NULL, gnh->opt_len * 4,

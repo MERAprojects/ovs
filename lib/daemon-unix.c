@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -434,15 +435,21 @@ monitor_daemon(pid_t daemon_pid)
  * daemon_complete()) or that it failed to start up (by exiting with a nonzero
  * exit code). */
 void
+#ifdef OPS
+daemonize_start(void)
+#else
 daemonize_start(bool access_datapath)
+#endif
 {
     assert_single_threaded();
     daemonize_fd = -1;
 
+#ifndef OPS
     if (switch_user) {
         daemon_become_new_user__(access_datapath);
         switch_user = false;
     }
+#endif
 
     if (detach) {
         pid_t pid;

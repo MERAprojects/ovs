@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1119,6 +1120,10 @@ static const struct netdev_class dummy_class = {
     netdev_dummy_dealloc,
     netdev_dummy_get_config,
     netdev_dummy_set_config,
+#ifdef OPS
+    NULL,                       /* set_hw_intf_info */
+    NULL,                       /* set_hw_intf_config */
+#endif
     NULL,                       /* get_tunnel_config */
     NULL,                       /* build header */
     NULL,                       /* push header */

@@ -765,3 +765,74 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
 014: i=1 r=123.5 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<0>
 015: done
 ]])
+
+if HALON
+m4_define([OVSDB_CHECK_IDL_INFO_C],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl seqno positive $5])
+   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl-seqno-info unix:socket $3],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_IDL_INFO_C([simple idl, insert and modify seqno increment],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0}} ]']],
+  [['["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [],
+       "row": {"b": true}}]']],
+  [[000: i=1 idlseq=2 tiseq=2 tmseq=2 tdseq=0 riseq=2 rmseq=2 cmseq=0 r=2 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+001: {"error":null,"result":[{"count":1}]}
+002: i=1 idlseq=3 tiseq=2 tmseq=3 tdseq=0 riseq=2 rmseq=3 cmseq=3 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+003: done
+]])
+
+m4_define([OVSDB_CHECK_IDL_DELETE_SEQNO_C],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl delete seqno positive $5])
+   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl-delete-seqno unix:socket $3],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_IDL_DELETE_SEQNO_C([simple idl, table delete seqno increment],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0}},
+      {"op": "insert",
+       "table": "simple",
+       "row": {}}]']],
+  [['["idltest",
+      {"op": "delete",
+       "table": "simple",
+       "where": [["i", "==", 1]]}]']],
+  [[000: i=0 idlseq=3 tdseq=0
+000: i=1 idlseq=3 tdseq=0
+001: {"error":null,"result":[{"count":1}]}
+002: i=0 idlseq=4 tdseq=4
+003: done
+]])
+endif

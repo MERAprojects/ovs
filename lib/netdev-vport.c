@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1467,6 +1468,18 @@ netdev_vport_range(struct unixctl_conn *conn, int argc,
     unixctl_command_reply(conn, "OK");
 }
 
+#ifdef OPS
+#define SET_HW_INTF_CONFIG NULL,
+#define SET_HW_INTF_INFO NULL,
+#define ENABLE_L3 NULL,
+#define DISABLE_L3 NULL,
+#else
+#define SET_HW_INTF_CONFIG
+#define SET_HW_INTF_INFO
+#define ENABLE_L3
+#define DISABLE_L3
+#endif
+
 
 #define VPORT_FUNCTIONS(GET_CONFIG, SET_CONFIG,             \
                         GET_TUNNEL_CONFIG, GET_STATUS,      \
@@ -1482,6 +1495,8 @@ netdev_vport_range(struct unixctl_conn *conn, int argc,
     netdev_vport_dealloc,                                   \
     GET_CONFIG,                                             \
     SET_CONFIG,                                             \
+    SET_HW_INTF_INFO            /* set_hw_intf_info */      \
+    SET_HW_INTF_CONFIG          /* set_hw_intf_config */    \
     GET_TUNNEL_CONFIG,                                      \
     BUILD_HEADER,                                           \
     PUSH_HEADER,                                            \

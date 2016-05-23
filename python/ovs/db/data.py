@@ -545,3 +545,25 @@ class Datum(object):
                   % (var, self.type.key.type.to_string().upper())]
 
         return s
+
+    def cEnumConst(self, prefix):
+        if len(self.values) > 1:
+            s = []
+            for en in sorted(self.values):
+                sv = re.sub('[\"]', '', en.to_string())
+                sp = re.sub('[-+*%]', '_', sv)
+                sp = "%s_%s" % (prefix, sp.upper())
+                if en.type == ovs.db.types.StringType:
+                    s.append('%-50s "%s"' % (sp, sv))
+                else:
+                    s.append('%-50s %s' % (sp, sv))
+            return "\n".join(s)
+
+    def cEnumType(self, prefix):
+        if len(self.values) > 1:
+            s = []
+            for en in sorted(self.values):
+                ev = re.sub('[\"]', '', en.to_string())
+                ev = re.sub('[-+*%]', '_', ev)
+                s.append("%s_%s" % (prefix, ev.upper()))
+            return s

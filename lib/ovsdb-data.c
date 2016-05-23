@@ -1642,6 +1642,36 @@ ovsdb_datum_find_key(const struct ovsdb_datum *datum,
     return UINT_MAX;
 }
 
+#ifdef OPS
+/*
+ * very specific data extraction function.  Given a "string" key,
+ * return the int64_t value.  It is assumed that the types of
+ * key & data are known and correct.  The requested value is
+ * returned in "value_extracted" but ONLY if the function
+ * returns 0 (no error).  If any errors are encountered, or
+ * the key does not exist in datum, function will return a
+ * non 0 value (error).
+ */
+int
+ovsdb_datum_get_int64_value_given_string_key (const struct ovsdb_datum *datum,
+    char *key, int64_t *value_extracted)
+{
+    unsigned int idx;
+    union ovsdb_atom key_atom;
+
+    if (NULL == datum) {
+        return -1;
+    }
+    key_atom.string = key;
+    idx = ovsdb_datum_find_key(datum, &key_atom, OVSDB_TYPE_STRING);
+    if (UINT_MAX == idx) {
+        return -1;
+    }
+    *value_extracted = datum->values[idx].integer;
+    return 0;
+}
+#endif
+
 /* If 'key' and 'value' is one of the key-value pairs in 'datum', returns its
  * index within 'datum', otherwise UINT_MAX.  'key.type' must be the type of
  * the atoms stored in the 'keys' array in 'datum'.  'value_type' may be the

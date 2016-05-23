@@ -1,4 +1,5 @@
 /* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -249,7 +250,11 @@ main(int argc, char *argv[])
 
     save_config__(config_tmpfile, &remotes, &db_filenames);
 
+#ifdef OPS
+    daemonize_start();
+#else
     daemonize_start(false);
+#endif
 
     /* Load the saved config. */
     load_config(config_tmpfile, &remotes, &db_filenames);

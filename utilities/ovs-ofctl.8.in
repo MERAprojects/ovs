@@ -1909,7 +1909,7 @@ slaves represented as \fIslave_type\fR.  Currently the only supported
 \fIslave_type\fR is \fBofport\fR.  Thus, each \fIs1\fR through \fIsN\fR should
 be an OpenFlow port number. Outputs to the selected slave.
 .IP
-Currently, \fIfields\fR must be either \fBeth_src\fR, \fBsymmetric_l4\fR, \fBsymmetric_l3l4\fR, or \fBsymmetric_l3l4+udp\fR, 
+Currently, \fIfields\fR must be either \fBeth_src\fR, \fBsymmetric_l4\fR, \fBsymmetric_l3l4\fR, or \fBsymmetric_l3l4+udp\fR,
 and \fIalgorithm\fR must be one of \fBhrw\fR and \fBactive_backup\fR.
 .IP
 Example: \fBbundle(eth_src,0,hrw,ofport,slaves:4,8)\fR uses an Ethernet source

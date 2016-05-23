@@ -410,6 +410,13 @@ class BaseType(object):
                         % (var, self.ref_type.upper()))
         return '\n'.join([indent + stmt for stmt in stmts])
 
+    def cEnumConst(self, prefix):
+        if self.enum:
+            return self.enum.cEnumConst(prefix)
+
+    def cEnumType(self, prefix):
+        if self.enum:
+            return self.enum.cEnumType(prefix)
 
 class Type(object):
     DEFAULT_MIN = 1
@@ -596,3 +603,11 @@ class Type(object):
             n_max = self.n_max
         initMax = "%s%s.n_max = %s;" % (indent, var, n_max)
         return "\n".join((initKey, initValue, initMin, initMax))
+
+    def cEnumConst(self, prefix):
+        if self.key is not None:
+            return self.key.cEnumConst(prefix)
+
+    def cEnumType(self, prefix):
+        if self.key is not None:
+            return self.key.cEnumType(prefix)

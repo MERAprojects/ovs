@@ -1,4 +1,5 @@
 /* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -238,6 +239,9 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class,
             = table->change_seqno[OVSDB_IDL_CHANGE_MODIFY]
             = table->change_seqno[OVSDB_IDL_CHANGE_DELETE] = 0;
         table->idl = idl;
+#ifdef OPS
+        table->insert_seqno = table->modify_seqno = table->delete_seqno = 0;
+#endif
     }
 
     idl->state_seqno = UINT_MAX;
@@ -994,6 +998,9 @@ ovsdb_idl_parse_update__(struct ovsdb_idl *idl,
 
             if (ovsdb_idl_process_update(table, &uuid, old_json, new_json)) {
                 idl->change_seqno++;
+#ifdef OPS
+                table->modify_seqno = idl->change_seqno;
+#endif
             }
         }
     }
@@ -1080,7 +1087,11 @@ ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json,
 
     SHASH_FOR_EACH (node, json_object(row_json)) {
         const char *column_name = node->name;
+#ifdef OPS
+        struct ovsdb_idl_column *column;
+#else
         const struct ovsdb_idl_column *column;
+#endif
         struct ovsdb_datum datum;
         struct ovsdb_error *error;
 
@@ -1100,6 +1111,9 @@ ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json,
                 ovsdb_datum_swap(old, &datum);
                 if (table->modes[column_idx] & OVSDB_IDL_ALERT) {
                     changed = true;
+#ifdef OPS
+                    column->modify_seqno = (row->table->idl->change_seqno + 1);
+#endif
                     row->change_seqno[change]
                         = row->table->change_seqno[change]
                         = row->table->idl->change_seqno + 1;
@@ -1348,6 +1362,12 @@ ovsdb_idl_insert_row(struct ovsdb_idl_row *row, const struct json *row_json)
     ovsdb_idl_row_parse(row);
 
     ovsdb_idl_row_reparse_backrefs(row);
+#ifdef OPS
+    row->insert_seqno = row->table->insert_seqno
+                      = row->modify_seqno
+                      = row->table->modify_seqno
+                      = (row->table->idl->change_seqno + 1);
+#endif
 }
 
 static void
@@ -1356,6 +1376,9 @@ ovsdb_idl_delete_row(struct ovsdb_idl_row *row)
     ovsdb_idl_row_unparse(row);
     ovsdb_idl_row_clear_arcs(row, true);
     ovsdb_idl_row_clear_old(row);
+#ifdef OPS
+    row->table->delete_seqno = (row->table->idl->change_seqno + 1);
+#endif
     if (list_is_empty(&row->dst_arcs)) {
         ovsdb_idl_row_destroy(row);
     } else {
@@ -1374,6 +1397,14 @@ ovsdb_idl_modify_row(struct ovsdb_idl_row *row, const struct json *row_json)
     ovsdb_idl_row_clear_arcs(row, true);
     changed = ovsdb_idl_row_update(row, row_json, OVSDB_IDL_CHANGE_MODIFY);
     ovsdb_idl_row_parse(row);
+
+#ifdef OPS
+    if( changed )
+    {
+        /* +1 because its incremented after this ft */
+        row->modify_seqno = (row->table->idl->change_seqno + 1);
+    }
+#endif
 
     return changed;
 }

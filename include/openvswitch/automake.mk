@@ -1,4 +1,8 @@
+if OPS
+openvswitchincludedir = $(includedir)/ovs/openvswitch
+else
 openvswitchincludedir = $(includedir)/openvswitch
+endif
 openvswitchinclude_HEADERS = \
 	include/openvswitch/compiler.h \
 	include/openvswitch/list.h \

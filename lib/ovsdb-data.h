@@ -189,6 +189,14 @@ bool ovsdb_datum_equals(const struct ovsdb_datum *,
 unsigned int ovsdb_datum_find_key(const struct ovsdb_datum *,
                                   const union ovsdb_atom *key,
                                   enum ovsdb_atomic_type key_type);
+#ifdef OPS
+/*
+ * given a string key, returns the corresponding int64_t value,
+ * but ONLY if function return value is 0 (no error).
+ */
+int ovsdb_datum_get_int64_value_given_string_key (const struct ovsdb_datum *datum,
+    char *key, int64_t *value_extracted);
+#endif
 unsigned int ovsdb_datum_find_key_value(const struct ovsdb_datum *,
                                         const union ovsdb_atom *key,
                                         enum ovsdb_atomic_type key_type,

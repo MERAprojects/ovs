@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2009-2015 Nicira, Inc.
- * Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,6 +61,9 @@
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
 #include "bundles.h"
+#ifdef OPS
+#include "vlan-bitmap.h"
+#endif
 
 VLOG_DEFINE_THIS_MODULE(ofproto);
 
@@ -365,7 +368,9 @@ ofproto_init(const struct shash *iface_hints)
     struct shash_node *node;
     size_t i;
 
+#ifndef OPS_TEMP
     ofproto_class_register(&ofproto_dpif_class);
+#endif
 
     /* Make a local copy, since we don't own 'iface_hints' elements. */
     SHASH_FOR_EACH(node, iface_hints) {
@@ -607,6 +612,10 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
 
     /* Set the initial tables version. */
     ofproto_bump_tables_version(ofproto);
+
+#ifdef OPS
+    ofproto->vlans_bmp = bitmap_allocate(VLAN_BITMAP_SIZE);
+#endif
 
     *ofprotop = ofproto;
     return 0;
@@ -1316,6 +1325,41 @@ ofproto_bundle_unregister(struct ofproto *ofproto, void *aux)
     return ofproto_bundle_register(ofproto, aux, NULL);
 }
 
+#ifdef OPS
+/* Retrieves bundle information in 'ofproto'.
+ * Stores bundle handle in 'bundle_handle'. */
+int
+ofproto_bundle_get(struct ofproto *ofproto, void *aux,
+                   int *bundle_handle)
+{
+    if (!ofproto->ofproto_class->bundle_get) {
+        *bundle_handle = -1;
+        return EOPNOTSUPP;
+    }
+
+    return ofproto->ofproto_class->bundle_get(ofproto, aux, bundle_handle);
+}
+
+
+/* VLANs. */
+int
+ofproto_set_vlan(struct ofproto *ofproto, int vid, bool add)
+{
+    int rc = 0;
+
+    if (ofproto->ofproto_class->set_vlan) {
+        rc = ofproto->ofproto_class->set_vlan(ofproto, vid, add);
+        if (rc == 0) {
+            bitmap_set(ofproto->vlans_bmp, vid, add);
+        }
+    } else {
+        rc = EOPNOTSUPP;
+    }
+
+    return rc;
+}
+#endif
+
 
 /* Registers a mirror associated with client data pointer 'aux' in 'ofproto'.
  * If 'aux' is already registered then this function updates its configuration
@@ -1588,6 +1632,10 @@ ofproto_destroy(struct ofproto *p)
     if (!p) {
         return;
     }
+
+#ifdef OPS
+    bitmap_free(p->vlans_bmp);
+#endif
 
     if (p->meters) {
         meter_delete(p, 1, p->meter_features.max_meters);
@@ -7802,6 +7850,48 @@ ofproto_unixctl_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
     ds_destroy(&results);
 }
 
+#ifdef OPS
+static void
+ofproto_print_details(struct ds *ds, const struct ofproto *ofproto)
+{
+    const struct ofport *port;
+
+    ds_put_format(ds, "---- %s ----\n", ofproto->name);
+    ds_put_format(ds, "type: %s\n", ofproto->type);
+
+    HMAP_FOR_EACH (port, hmap_node, &ofproto->ports) {
+        ds_put_format(ds, "   port: %s\n", netdev_get_name(port->netdev));
+    }
+}
+
+static void
+ofproto_unixctl_show(struct unixctl_conn *conn,
+                  int argc, const char *argv[],
+                  void *aux OVS_UNUSED)
+{
+    const struct ofproto *ofproto;
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    bool printed = false;
+
+    HMAP_FOR_EACH (ofproto, hmap_node, &all_ofprotos) {
+        if (argc < 2 || !strcmp(ofproto->name, argv[1])) {
+            ofproto_print_details(&ds, ofproto);
+            printed = true;
+        }
+    }
+
+    if (argc > 1 && !printed) {
+        unixctl_command_reply_error(conn, "no such ofproto");
+        goto out;
+    }
+
+    unixctl_command_reply(conn, ds_cstr(&ds));
+
+out:
+    ds_destroy(&ds);
+}
+#endif
+
 static void
 ofproto_unixctl_init(void)
 {
@@ -7812,7 +7902,12 @@ ofproto_unixctl_init(void)
     registered = true;
 
     unixctl_command_register("ofproto/list", "", 0, 0,
+
                              ofproto_unixctl_list, NULL);
+#ifdef OPS
+    unixctl_command_register("ofproto/show", "[name]", 0, 1,
+                             ofproto_unixctl_show, NULL);
+#endif
 }
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
@@ -7903,3 +7998,105 @@ ofproto_port_set_realdev(struct ofproto *ofproto, ofp_port_t vlandev_ofp_port,
     }
     return error;
 }
+
+#ifdef OPS
+/* Function to add l3 host entry */
+int
+ofproto_add_l3_host_entry(struct ofproto *ofproto, void *aux,
+                          bool is_ipv6_addr, char *ip_addr,
+                          char *next_hop_mac_addr, int *l3_egress_id)
+{
+    int rc;
+
+    rc = (ofproto->ofproto_class->add_l3_host_entry
+            ? ofproto->ofproto_class->add_l3_host_entry(ofproto, aux,
+                  is_ipv6_addr, ip_addr, next_hop_mac_addr, l3_egress_id)
+            : EOPNOTSUPP);
+
+    VLOG_DBG("Add L3 host entry rc=(%d)", rc);
+
+    return rc;
+} /* ofproto_add_host_entry */
+
+/* Function to delete l3 host entry */
+int
+ofproto_delete_l3_host_entry(struct ofproto *ofproto, void *aux,
+                             bool is_ipv6_addr, char *ip_addr,
+                             int *l3_egress_id)
+{
+    int rc;
+
+    rc = (ofproto->ofproto_class->delete_l3_host_entry
+            ? ofproto->ofproto_class->delete_l3_host_entry(ofproto, aux,
+                       is_ipv6_addr, ip_addr, l3_egress_id)
+            : EOPNOTSUPP);
+
+    VLOG_DBG("Delete L3 host entry rc=(%d)", rc);
+
+    return rc;
+} /* ofproto_delete_host_entry */
+
+/* Functionto read and reset host hit bit */
+int
+ofproto_get_l3_host_hit(struct ofproto *ofproto, void *aux,
+                        bool is_ipv6_addr, char *ip_addr,
+                        bool *hit_bit)
+{
+    int rc;
+
+    rc = ofproto->ofproto_class->get_l3_host_hit ?
+           ofproto->ofproto_class->get_l3_host_hit(ofproto, aux,
+           is_ipv6_addr, ip_addr, hit_bit) :
+           EOPNOTSUPP;
+
+    VLOG_DBG("L3 host hit-bit rc=(%d)", rc);
+
+    return rc;
+} /* ofproto_get_l3_host_hit */
+
+/* Route updates */
+int
+ofproto_l3_route_action(struct ofproto *ofproto,
+                        enum ofproto_route_action action,
+                        struct ofproto_route *route)
+{
+    int rc;
+
+    rc = ofproto->ofproto_class->l3_route_action ?
+         ofproto->ofproto_class->l3_route_action(ofproto, action, route) :
+         EOPNOTSUPP;
+
+    VLOG_DBG("l3_route_action rc=(%d), action %d", rc, action);
+
+    return rc;
+}
+
+/* ECMP */
+int
+ofproto_l3_ecmp_set(struct ofproto *ofproto, bool enable)
+{
+    int rc;
+
+    rc = ofproto->ofproto_class->l3_ecmp_set ?
+         ofproto->ofproto_class->l3_ecmp_set(ofproto, enable) :
+         EOPNOTSUPP;
+
+    VLOG_DBG("%s rc (%d), enable (%d)", __func__, rc, enable);
+
+    return rc;
+}
+
+int
+ofproto_l3_ecmp_hash_set(struct ofproto *ofproto, unsigned int hash, bool enable)
+{
+    int rc;
+
+    rc = ofproto->ofproto_class->l3_ecmp_hash_set ?
+         ofproto->ofproto_class->l3_ecmp_hash_set(ofproto, hash, enable) :
+         EOPNOTSUPP;
+
+    VLOG_DBG("%s rc (%d), hash (%x) enable (%d)", __func__, rc, hash, enable);
+
+    return rc;
+}
+#endif

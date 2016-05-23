@@ -72,7 +72,7 @@ VOID OvsCleanupPacketQueue(struct _OVS_OPEN_INSTANCE *instance);
 
 POVS_PACKET_QUEUE_ELEM OvsCreateQueueNlPacket(PVOID userData,
                                               UINT32 userDataLen,
-                                              UINT32 cmd, 
+                                              UINT32 cmd,
                                               POVS_VPORT_ENTRY vport,
                                               OvsFlowKey *key,
                                               PNET_BUFFER_LIST nbl,

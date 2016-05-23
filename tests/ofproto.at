@@ -4271,7 +4271,7 @@ vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x06 and ea
 vconn|DBG|unix: received: NXT_SET_FLOW_FORMAT: format=nxm
 vconn|DBG|unix: received: OFPT_BARRIER_REQUEST:
 vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY:
-vconn|DBG|unix: received: NXST_FLOW request: 
+vconn|DBG|unix: received: NXST_FLOW request:
 vconn|DBG|unix: sent (Success): NXST_FLOW reply:
  idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:8
  in_port=2,dl_src=00:66:77:88:99:aa actions=drop

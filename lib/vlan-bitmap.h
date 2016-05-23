@@ -1,4 +1,5 @@
 /* Copyright (c) 2011 Nicira, Inc.
+ * Copyright (C) 2015, 2016 Hewlett-Packard Development Company, L.P.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +27,10 @@
  * either that all VLANs are or are not members, depending on the vlan_bitmap.
  *
  * This is empirically a useful data structure. */
+
+#ifdef OPS
+#define VLAN_BITMAP_SIZE 4096
+#endif
 
 unsigned long *vlan_bitmap_from_array(const int64_t *vlans, size_t n_vlans);
 int vlan_bitmap_from_array__(const int64_t *vlans, size_t n_vlans,

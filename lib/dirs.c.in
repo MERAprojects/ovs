@@ -110,3 +110,14 @@ ovs_bindir(void)
 
     return get_dir(&d);
 }
+
+#ifdef OPS
+const char *
+ovs_pluginsdir(void)
+{
+    static const char *dbdir;
+
+    dbdir = xasprintf("%s/openvswitch/plugins", @libdir@);
+    return dbdir;
+}
+#endif
