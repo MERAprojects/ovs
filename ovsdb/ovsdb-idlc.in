@@ -932,6 +932,8 @@ const struct ovsdb_datum *
                 txn_write_func = "ovsdb_idl_txn_write_clone"
             elif type.n_max == 1:
                 print "    union ovsdb_atom key;"
+                if type.value:
+                    print "    union ovsdb_atom value;"
                 print
                 print "    ovs_assert(inited);"
                 print "    if (%s) {" % nVar
@@ -942,7 +944,11 @@ const struct ovsdb_datum *
                 print "        datum.n = 0;"
                 print "        datum.keys = NULL;"
                 print "    }"
-                print "    datum.values = NULL;"
+                if type.value:
+                    print "    datum.values = &value;"
+                    print "    " + type.value.copyCValue("datum.values[0].%s" % type.value.type.to_string(), "%s[0]" % valueVar)
+                else:
+                    print "    datum.values = NULL;"
                 txn_write_func = "ovsdb_idl_txn_write_clone"
             else:
                 print "    size_t i;"
