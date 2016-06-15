@@ -181,6 +181,7 @@ static struct ovsdb_idl_row *ovsdb_idl_row_create(struct ovsdb_idl_table *,
                                                   const struct uuid *);
 static void ovsdb_idl_row_destroy(struct ovsdb_idl_row *);
 static void ovsdb_idl_row_destroy_postprocess(struct ovsdb_idl *);
+static void ovsdb_idl_row_free(struct ovsdb_idl_row *);
 static void ovsdb_idl_destroy_all_map_op_lists(struct ovsdb_idl_row *);
 
 static void ovsdb_idl_row_parse(struct ovsdb_idl_row *);
@@ -344,17 +345,12 @@ ovsdb_idl_clear(struct ovsdb_idl *idl)
 
             if (!ovsdb_idl_row_is_orphan(row)) {
                 ovsdb_idl_remove_from_indexes(row);
-                ovsdb_idl_row_unparse(row);
             }
             LIST_FOR_EACH_SAFE (arc, next_arc, src_node, &row->src_arcs) {
                 free(arc);
             }
             /* No need to do anything with dst_arcs: some node has those arcs
              * as forward arcs and will destroy them itself. */
-
-            if (!list_is_empty(&row->track_node)) {
-                list_remove(&row->track_node);
-            }
 
             ovsdb_idl_row_destroy(row);
         }
@@ -843,8 +839,7 @@ ovsdb_idl_track_clear(const struct ovsdb_idl *idl)
                 list_remove(&row->track_node);
                 list_init(&row->track_node);
                 if (ovsdb_idl_row_is_orphan(row)) {
-                    ovsdb_idl_row_clear_old(row);
-                    free(row);
+                    ovsdb_idl_row_free(row);
                 }
             }
         }
@@ -1972,11 +1967,18 @@ ovsdb_idl_row_destroy_postprocess(struct ovsdb_idl *idl)
             LIST_FOR_EACH_SAFE(row, next, track_node, &table->track_list) {
                 if (!ovsdb_idl_track_is_set(row->table)) {
                     list_remove(&row->track_node);
-                    free(row);
+                    ovsdb_idl_row_free(row);
                 }
             }
         }
     }
+}
+
+static void
+ovsdb_idl_row_free(struct ovsdb_idl_row *row)
+{
+    ovsdb_idl_row_unparse(row);
+    free(row);
 }
 
 static void
@@ -2008,7 +2010,6 @@ static void
 ovsdb_idl_delete_row(struct ovsdb_idl_row *row)
 {
     ovsdb_idl_remove_from_indexes(row);
-    ovsdb_idl_row_unparse(row);
     ovsdb_idl_row_clear_arcs(row, true);
     ovsdb_idl_row_clear_old(row);
 #ifdef OPS
@@ -2764,8 +2765,6 @@ ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
                 ovsdb_idl_row_clear_arcs(row, false);
                 ovsdb_idl_row_parse(row);
             }
-        } else {
-            ovsdb_idl_row_unparse(row);
         }
         ovsdb_idl_row_clear_new(row);
 
@@ -2779,7 +2778,7 @@ ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
         hmap_node_nullify(&row->txn_node);
         if (!row->old) {
             hmap_remove(&row->table->rows, &row->hmap_node);
-            free(row);
+            ovsdb_idl_row_free(row);
         }
     }
     hmap_destroy(&txn->txn_rows);
@@ -3479,12 +3478,11 @@ ovsdb_idl_txn_delete(const struct ovsdb_idl_row *row_)
 
     ovs_assert(row->new != NULL);
     if (!row->old) {
-        ovsdb_idl_row_unparse(row);
         ovsdb_idl_row_clear_new(row);
         ovs_assert(!row->prereqs);
         hmap_remove(&row->table->rows, &row->hmap_node);
         hmap_remove(&row->table->idl->txn->txn_rows, &row->txn_node);
-        free(row);
+        ovsdb_idl_row_free(row);
         return;
     }
     if (hmap_node_is_null(&row->txn_node)) {
