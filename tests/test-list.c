@@ -184,6 +184,46 @@ test_list_for_each_pop(void)
     }
 }
 
+/* Tests the transplant of one list into another  */
+static void
+test_list_transplant(void)
+{
+    struct ovs_list list_a, list_b;
+    struct element a, b, c, d;
+
+    a.value = 0;
+    b.value = 1;
+    c.value = 2;
+    d.value = 3;
+
+    list_init(&list_a);
+    list_init(&list_b);
+
+    list_insert(&list_a, &a.node);
+    list_insert(&list_a, &b.node);
+    list_insert(&list_b, &c.node);
+    list_insert(&list_b, &d.node);
+
+    /* Check test preconditions */
+    assert(2 == list_size(&list_a));
+    assert(2 == list_size(&list_b));
+
+    /* Perform transplant */
+    list_transplant(&list_a, &list_b);
+
+    /* Check expected result */
+    assert(4 == list_size(&list_a));
+    assert(0 == list_size(&list_b));
+
+    struct element *node;
+    int n = 0;
+    LIST_FOR_EACH(node, node, &list_a) {
+        assert(n == node->value);
+        n++;
+    }
+    assert(n == 4);
+}
+
 static void
 run_test(void (*function)(void))
 {
@@ -197,6 +237,7 @@ test_list_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     run_test(test_list_construction);
     run_test(test_list_for_each_safe);
     run_test(test_list_for_each_pop);
+    run_test(test_list_transplant);
     printf("\n");
 }
 
