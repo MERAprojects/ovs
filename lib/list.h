@@ -277,4 +277,11 @@ list_is_short(const struct ovs_list *list)
     return list->next == list->prev;
 }
 
+/* Transplant a list into another, and resets the origin list */
+static inline void
+list_push_back_all(struct ovs_list *dst, struct ovs_list *src)
+{
+    list_splice(dst, src->next, src);
+}
+
 #endif /* list.h */
