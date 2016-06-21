@@ -881,6 +881,31 @@ OVSDB_CHECK_IDL_DELETE_SEQNO_C([simple idl, table delete seqno increment],
 ]])
 endif
 
+m4_define([OVSDB_CHECK_IDL_PRIORITY_SESSION_C],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl priority_session positive $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_DATA([priority.json], [[
+   {
+   "0": ["maxp"],
+   "5": ["example"],
+   "15": ["minp"],
+   "20": ["wrongp"]
+   }
+]])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db --priority-file="`pwd`"/priority.json], [0], [stdout], [stderr])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-priority-session unix:socket],
+            [0], [[example: 5
+maxp: 0
+minp: 15
+wrongp: 8
+]], [ignore], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_IDL_PRIORITY_SESSION_C([ovsdb idl priority sessions])
+
 # Tests to verify the functionality of the one column compound index.
 # It tests index for one column string and integer indexes.
 # The run of test-ovsdb generates the output of the display of data using the different indexes defined in

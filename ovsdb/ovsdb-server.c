@@ -80,6 +80,7 @@ static unixctl_cb_func ovsdb_server_compact;
 static unixctl_cb_func ovsdb_server_reconnect;
 static unixctl_cb_func ovsdb_server_perf_counters_clear;
 static unixctl_cb_func ovsdb_server_perf_counters_show;
+static unixctl_cb_func ovsdb_server_reload_priorities;
 
 struct server_config {
     struct sset *remotes;
@@ -100,7 +101,7 @@ static void close_db(struct db *db);
 
 static void parse_options(int *argc, char **argvp[],
                           struct sset *remotes, char **unixctl_pathp,
-                          char **run_command);
+                          char **run_command, char **priorities);
 OVS_NO_RETURN static void usage(void);
 
 static char *reconfigure_remotes(struct ovsdb_jsonrpc_server *,
@@ -131,6 +132,7 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
     *exiting = false;
     ssl_error = NULL;
     remotes_error = NULL;
+    int current_priority = 0;
     while (!*exiting) {
         memory_run();
         if (memory_should_report()) {
@@ -155,6 +157,7 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
             reconfigure_remotes(jsonrpc, all_dbs, remotes),
             &remotes_error);
         report_error_if_changed(reconfigure_ssl(all_dbs), &ssl_error);
+        ovsdb_jsonrpc_server_set_current_priority(jsonrpc, current_priority);
         ovsdb_jsonrpc_server_run(jsonrpc);
 
         SHASH_FOR_EACH(node, all_dbs) {
@@ -175,8 +178,13 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
         }
 
         memory_wait();
-        ovsdb_jsonrpc_server_wait(jsonrpc);
-        unixctl_server_wait(unixctl);
+        /* Prevents the OVSDB Server to wait, until it had tried to
+         * process the requests from all the existing clients.
+         */
+        if (current_priority == OVSDB_PRIORITY_LOWEST) {
+            ovsdb_jsonrpc_server_wait(jsonrpc);
+            unixctl_server_wait(unixctl);
+        }
         SHASH_FOR_EACH(node, all_dbs) {
             struct db *db = node->data;
             ovsdb_trigger_wait(db->db, time_msec());
@@ -187,11 +195,15 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
         if (*exiting) {
             poll_immediate_wake();
         }
-        poll_timer_wait_until(status_timer);
-        poll_block();
+        if (current_priority == OVSDB_PRIORITY_LOWEST) {
+            poll_timer_wait_until(status_timer);
+            poll_block();
+        }
         if (should_service_stop()) {
             *exiting = true;
         }
+        current_priority++;
+        current_priority %= OVSDB_PRIORITY_N;
     }
 
 }
@@ -201,6 +213,7 @@ main(int argc, char *argv[])
 {
     char *unixctl_path = NULL;
     char *run_command = NULL;
+    char *priority_file = NULL;
     struct unixctl_server *unixctl;
     struct ovsdb_jsonrpc_server *jsonrpc;
     struct sset remotes, db_filenames;
@@ -221,7 +234,8 @@ main(int argc, char *argv[])
     fatal_ignore_sigpipe();
     process_init();
 
-    parse_options(&argc, &argv, &remotes, &unixctl_path, &run_command);
+    parse_options(&argc, &argv, &remotes, &unixctl_path, &run_command,
+                  &priority_file);
     daemon_become_new_user(false);
 
     /* Create and initialize 'config_tmpfile' as a temporary file to hold
@@ -259,6 +273,9 @@ main(int argc, char *argv[])
     /* Load the saved config. */
     load_config(config_tmpfile, &remotes, &db_filenames);
     jsonrpc = ovsdb_jsonrpc_server_create();
+
+    ovsdb_jsonrpc_set_priority_file(jsonrpc, priority_file);
+    ovsdb_jsonrpc_load_priorities(jsonrpc);
 
     shash_init(&all_dbs);
     server_config.all_dbs = &all_dbs;
@@ -334,7 +351,9 @@ main(int argc, char *argv[])
                              ovsdb_server_perf_counters_show, NULL);
     unixctl_command_register("ovsdb-server/perf-counters-clear", "", 0, 0,
                              ovsdb_server_perf_counters_clear, NULL);
-
+    /* Reloads the priority file */
+    unixctl_command_register("ovsdb-server/priority-reload", "",
+                             0, 0, ovsdb_server_reload_priorities, jsonrpc);
     main_loop(jsonrpc, &all_dbs, unixctl, &remotes, run_process, &exiting);
 
     ovsdb_jsonrpc_server_destroy(jsonrpc);
@@ -1059,6 +1078,15 @@ ovsdb_server_perf_counters_clear(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
+ovsdb_server_reload_priorities(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                          const char *argv[] OVS_UNUSED, void *jsonrpc_)
+{
+    struct ovsdb_jsonrpc_server *jsonrpc = jsonrpc_;
+    ovsdb_jsonrpc_load_priorities(jsonrpc);
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
 ovsdb_server_compact(struct unixctl_conn *conn, int argc,
                      const char *argv[], void *dbs_)
 {
@@ -1253,7 +1281,8 @@ ovsdb_server_list_databases(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
 static void
 parse_options(int *argcp, char **argvp[],
-              struct sset *remotes, char **unixctl_pathp, char **run_command)
+              struct sset *remotes, char **unixctl_pathp, char **run_command,
+              char **priorities)
 {
     enum {
         OPT_REMOTE = UCHAR_MAX + 1,
@@ -1262,7 +1291,8 @@ parse_options(int *argcp, char **argvp[],
         OPT_BOOTSTRAP_CA_CERT,
         OPT_PEER_CA_CERT,
         VLOG_OPTION_ENUMS,
-        DAEMON_OPTION_ENUMS
+        DAEMON_OPTION_ENUMS,
+        OPT_PRIORITIES
     };
     static const struct option long_options[] = {
         {"remote",      required_argument, NULL, OPT_REMOTE},
@@ -1279,6 +1309,7 @@ parse_options(int *argcp, char **argvp[],
         {"private-key", required_argument, NULL, 'p'},
         {"certificate", required_argument, NULL, 'c'},
         {"ca-cert",     required_argument, NULL, 'C'},
+        {"priority-file",  required_argument, NULL, OPT_PRIORITIES},
         {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
@@ -1339,6 +1370,10 @@ parse_options(int *argcp, char **argvp[],
             stream_ssl_set_peer_ca_cert_file(optarg);
             break;
 
+        case OPT_PRIORITIES:
+            *priorities = optarg;
+            break;
+
         case '?':
             exit(EXIT_FAILURE);
 
@@ -1362,6 +1397,8 @@ usage(void)
            program_name, program_name, ovs_dbdir());
     printf("\nJSON-RPC options (may be specified any number of times):\n"
            "  --remote=REMOTE         connect or listen to REMOTE\n");
+    printf("\nPriority file (for priority sessions):\n"
+           "  --priority-file=FILE       json file with priorities\n");
     stream_usage("JSON-RPC", true, true, true);
     daemon_usage();
     vlog_usage();
