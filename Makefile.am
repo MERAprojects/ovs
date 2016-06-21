@@ -7,11 +7,7 @@
 
 AUTOMAKE_OPTIONS = foreign subdir-objects
 ACLOCAL_AMFLAGS = -I m4
-if OPS
-SUBDIRS = libltdl
-else
 SUBDIRS = datapath libltdl
-endif
 
 AM_CPPFLAGS = $(SSL_CFLAGS)
 AM_LDFLAGS = $(SSL_LDFLAGS)

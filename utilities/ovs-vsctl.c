@@ -835,10 +835,8 @@ pre_get_info(struct ctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_bridges);
 
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_name);
-#ifndef OPS_TEMP
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_controller);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_fail_mode);
-#endif
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_ports);
 
     ovsdb_idl_add_column(ctx->idl, &ovsrec_port_col_name);
@@ -849,9 +847,7 @@ pre_get_info(struct ctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &ovsrec_port_col_interfaces);
 
     ovsdb_idl_add_column(ctx->idl, &ovsrec_interface_col_name);
-#ifndef OPS_TEMP
     ovsdb_idl_add_column(ctx->idl, &ovsrec_interface_col_ofport);
-#endif
 #ifdef OPS
     /* FIXME: We currently use presence of subsystems as an indicator
      * that this is a physical switch instead of a virtual switch.  This
@@ -1151,7 +1147,6 @@ find_bridge(struct vsctl_context *vsctl_ctx, const char *name, bool must_exist)
     return br;
 }
 
-#ifndef OPS_TEMP
 static struct vsctl_bridge *
 find_real_bridge(struct vsctl_context *vsctl_ctx,
                  const char *name, bool must_exist)
@@ -1162,7 +1157,7 @@ find_real_bridge(struct vsctl_context *vsctl_ctx,
     }
     return br;
 }
-#endif
+
 static struct vsctl_port *
 find_port(struct vsctl_context *vsctl_ctx, const char *name, bool must_exist)
 {
@@ -1287,10 +1282,9 @@ static struct cmd_show_table cmd_show_tables[] = {
     {&ovsrec_table_bridge,
      &ovsrec_bridge_col_name,
      {
-#ifndef OPS_TEMP
       &ovsrec_bridge_col_controller,
       &ovsrec_bridge_col_fail_mode,
-#else
+#ifdef OPS_TEMP
       &ovsrec_bridge_col_vlans,
 #endif
       &ovsrec_bridge_col_ports},
@@ -1330,7 +1324,6 @@ static struct cmd_show_table cmd_show_tables[] = {
      {NULL, NULL, NULL}
     },
 
-#ifndef OPS_TEMP
     {&ovsrec_table_controller,
      &ovsrec_controller_col_target,
      {&ovsrec_controller_col_is_connected,
@@ -1338,7 +1331,6 @@ static struct cmd_show_table cmd_show_tables[] = {
       NULL},
      {NULL, NULL, NULL}
     },
-#endif
 #ifdef OPS
     {&ovsrec_table_subsystem,
      &ovsrec_subsystem_col_name,
@@ -1482,9 +1474,9 @@ pre_cmd_emer_reset(struct ctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_manager_options);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_ssl);
 
-#ifndef OPS_TEMP
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_controller);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_fail_mode);
+#ifndef OPS_TEMP
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_mirrors);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_netflow);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_sflow);
@@ -1513,8 +1505,8 @@ cmd_emer_reset(struct ctl_context *ctx)
 #ifndef OPS_TEMP
     const struct ovsrec_interface *iface;
     const struct ovsrec_mirror *mirror, *next_mirror;
-    const struct ovsrec_controller *ctrl, *next_ctrl;
 #endif
+    const struct ovsrec_controller *ctrl, *next_ctrl;
     const struct ovsrec_manager *mgr, *next_mgr;
 #ifndef OPS_TEMP
     const struct ovsrec_netflow *nf, *next_nf;
@@ -1532,9 +1524,9 @@ cmd_emer_reset(struct ctl_context *ctx)
     OVSREC_BRIDGE_FOR_EACH (br, idl) {
         const char *hwaddr;
 
-#ifndef OPS_TEMP
         ovsrec_bridge_set_controller(br, NULL, 0);
         ovsrec_bridge_set_fail_mode(br, NULL);
+#ifndef OPS_TEMP
         ovsrec_bridge_set_mirrors(br, NULL, 0);
         ovsrec_bridge_set_netflow(br, NULL);
         ovsrec_bridge_set_sflow(br, NULL);
@@ -1567,11 +1559,11 @@ cmd_emer_reset(struct ctl_context *ctx)
     OVSREC_MIRROR_FOR_EACH_SAFE (mirror, next_mirror, idl) {
         ovsrec_mirror_delete(mirror);
     }
+#endif
 
     OVSREC_CONTROLLER_FOR_EACH_SAFE (ctrl, next_ctrl, idl) {
         ovsrec_controller_delete(ctrl);
     }
-#endif
     OVSREC_MANAGER_FOR_EACH_SAFE (mgr, next_mgr, idl) {
         ovsrec_manager_delete(mgr);
     }
@@ -2867,7 +2859,6 @@ cmd_iface_to_br(struct ctl_context *ctx)
     ds_put_format(&ctx->output, "%s\n", iface->port->bridge->name);
 }
 
-#ifndef OPS_TEMP
 static void
 verify_controllers(struct ovsrec_bridge *bridge)
 {
@@ -3034,7 +3025,7 @@ cmd_set_fail_mode(struct ctl_context *ctx)
 
     ovsrec_bridge_set_fail_mode(br->br_cfg, fail_mode);
 }
-#endif
+
 static void
 verify_managers(const struct ovsrec_open_vswitch *ovs)
 {
@@ -3403,12 +3394,10 @@ static const struct ctl_table_class tables[] = {
 #endif
     }},
 
-#ifndef OPS_TEMP
     {&ovsrec_table_controller,
      {{&ovsrec_table_bridge,
        &ovsrec_bridge_col_name,
        &ovsrec_bridge_col_controller}}},
-#endif
 #ifdef OPS
     {&ovsrec_table_subsystem,
      {{&ovsrec_table_subsystem, &ovsrec_subsystem_col_name, NULL},
@@ -3959,7 +3948,6 @@ static const struct ctl_command_syntax vsctl_commands[] = {
     {"iface-to-br", 1, 1, "IFACE", pre_get_info, cmd_iface_to_br, NULL, "",
      RO},
 
-#ifndef OPS_TEMP
     /* Controller commands. */
     {"get-controller", 1, 1, "BRIDGE", pre_controller, cmd_get_controller,
      NULL, "", RO},
@@ -3973,7 +3961,7 @@ static const struct ctl_command_syntax vsctl_commands[] = {
      "", RW},
     {"set-fail-mode", 2, 2, "BRIDGE MODE", pre_get_info, cmd_set_fail_mode,
      NULL, "", RW},
-#endif
+
     /* Manager commands. */
     {"get-manager", 0, 0, "", pre_manager, cmd_get_manager, NULL, "", RO},
     {"del-manager", 0, 0, "", pre_manager, cmd_del_manager, NULL, "", RW},
