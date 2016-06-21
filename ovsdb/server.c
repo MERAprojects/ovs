@@ -19,6 +19,7 @@
 
 #include "hash.h"
 #include "ovsdb.h"
+#include "simap.h"
 
 /* Initializes 'session' as a session within 'server'. */
 void
@@ -121,6 +122,8 @@ ovsdb_server_init(struct ovsdb_server *server)
 {
     shash_init(&server->dbs);
     hmap_init(&server->locks);
+    simap_init(&server->priorities);
+    uuid_generate(&server->uuid);
 }
 
 /* Adds 'db' to the set of databases served out by 'server'.  Returns true if
@@ -151,6 +154,7 @@ ovsdb_server_destroy(struct ovsdb_server *server)
 {
     shash_destroy(&server->dbs);
     hmap_destroy(&server->locks);
+    simap_destroy(&server->priorities);
 }
 
 static struct ovsdb_lock *

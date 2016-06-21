@@ -212,7 +212,10 @@ usage(void)
            "        idl_compound_index_single_column:\n"
            "            test for indexes using one column as part of the index.\n"
            "        idl_compound_index_double_column:\n"
-           "            test for indexes using two columns as part of index.\n",
+           "            test for indexes using two columns as part of index.\n"
+           "  idl-priority-session\n"
+           "    Changes the identification of the session, and verifies the\n"
+           "    priorities returned by the OVSDB-Server.",
            program_name, program_name);
     vlog_usage();
     printf("\nOther options:\n"
@@ -2128,6 +2131,30 @@ do_idl(struct ovs_cmdl_context *ctx)
 }
 
 static void
+do_idl_priority_session(struct ovs_cmdl_context *ctx)
+{
+    struct ovsdb_idl *idl;
+    idltest_init();
+
+    idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, false, true);
+    setvbuf(stdout, NULL, _IONBF, 0);
+    ovsdb_idl_get_initial_snapshot(idl);
+
+    char *ids[] = {"example", "maxp", "minp", "wrongp"};
+    int i;
+
+    for(i = 0; i < sizeof(ids)/sizeof(*ids); i++){
+        ovsdb_idl_set_identity(idl, ids[i]);
+        while (ovsdb_idl_get_priority(idl) == IDL_PRIORITY_UNDEFINED) {
+            ovsdb_idl_wait(idl);
+            poll_block();
+            ovsdb_idl_run(idl);
+        }
+        printf("%s: %u\n", ids[i], ovsdb_idl_get_priority(idl));
+    }
+}
+
+static void
 print_idl_row_simple2(const struct idltest_simple2 *s, int step)
 {
     size_t i;
@@ -2699,6 +2726,7 @@ static struct ovs_cmdl_command all_commands[] = {
     { "idl-fetch-column-all", NULL, 1, INT_MAX, do_fetch_column_all },
     { "idl-fetch-table", NULL, 1, INT_MAX, do_fetch_table },
     { "idl-compound-index", NULL, 2, 2, do_idl_compound_index },
+    { "idl-priority-session", NULL, 1, 1, do_idl_priority_session },
     { "help", NULL, 0, INT_MAX, do_help },
     { NULL, NULL, 0, 0, NULL },
 };

@@ -39,6 +39,11 @@ struct ovsdb_jsonrpc_options {
 struct ovsdb_jsonrpc_options *
 ovsdb_jsonrpc_default_options(const char *target);
 
+void ovsdb_jsonrpc_load_priorities(struct ovsdb_jsonrpc_server * jsonrpc);
+
+void ovsdb_jsonrpc_set_priority_file(struct ovsdb_jsonrpc_server *,
+                                     char *priority_file);
+
 void ovsdb_jsonrpc_server_set_remotes(struct ovsdb_jsonrpc_server *,
                                       const struct shash *);
 
@@ -64,6 +69,8 @@ void ovsdb_jsonrpc_server_free_remote_status(
 void ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *);
 
 void ovsdb_jsonrpc_server_run(struct ovsdb_jsonrpc_server *);
+void ovsdb_jsonrpc_server_set_current_priority(struct ovsdb_jsonrpc_server *,
+                                               int priority);
 void ovsdb_jsonrpc_server_wait(struct ovsdb_jsonrpc_server *);
 
 void ovsdb_jsonrpc_server_get_memory_usage(const struct ovsdb_jsonrpc_server *,
@@ -71,5 +78,13 @@ void ovsdb_jsonrpc_server_get_memory_usage(const struct ovsdb_jsonrpc_server *,
 
 struct ovsdb_jsonrpc_monitor;
 void ovsdb_jsonrpc_monitor_destroy(struct ovsdb_jsonrpc_monitor *);
+
+enum ovsdb_priority {
+    OVSDB_PRIORITY_UNDEFINED = -1,
+    OVSDB_PRIORITY_HIGHEST = 0,
+    OVSDB_PRIORITY_DEFAULT = 8,
+    OVSDB_PRIORITY_LOWEST = 15,
+    OVSDB_PRIORITY_N = 16
+};
 
 #endif /* ovsdb/jsonrpc-server.h */
