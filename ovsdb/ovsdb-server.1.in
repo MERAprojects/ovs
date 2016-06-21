@@ -254,6 +254,14 @@ of 0 or 1 integer'' and ``set of 0 or 1 real''.  These conditions
 evaluate to false when the column is empty, and otherwise as described
 in RFC 7047 for integer and real types.
 .
+.IP "6. weak_gc refType"
+"weak_gc" refType has the same semantics as "weak", except that if weak_gc
+reference removal results in constraint or index violation of the referencing
+row, the transaction will not be cancelled and the referencing row would be
+garbage collected instead. Note that this garbage collection would only be
+allowed if the referencing table isRoot and there are no strong references
+to the row.
+.
 .SH "BUGS"
 .
 In Open vSwitch before version 2.4, when \fBovsdb\-server\fR sent

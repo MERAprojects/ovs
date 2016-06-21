@@ -87,7 +87,8 @@ struct ovsdb_txn_row {
 };
 
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
-delete_garbage_row(struct ovsdb_txn *txn, struct ovsdb_txn_row *r);
+delete_garbage_row(struct ovsdb_txn *txn, struct ovsdb_txn_row *r,
+                   bool check_isroot);
 static void ovsdb_txn_row_prefree(struct ovsdb_txn_row *);
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 for_each_txn_row(struct ovsdb_txn *txn,
@@ -343,7 +344,7 @@ delete_row_refs(struct ovsdb_txn *txn, const struct ovsdb_row *row,
         }
 
         if (--txn_row->n_refs == 0) {
-            struct ovsdb_error *error = delete_garbage_row(txn, txn_row);
+            struct ovsdb_error *error = delete_garbage_row(txn, txn_row, true);
             if (error) {
                 return error;
             }
@@ -354,12 +355,13 @@ delete_row_refs(struct ovsdb_txn *txn, const struct ovsdb_row *row,
 }
 
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
-delete_garbage_row(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
+delete_garbage_row(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row,
+                   bool check_isroot)
 {
     struct shash_node *node;
     struct ovsdb_row *row;
 
-    if (txn_row->table->schema->is_root) {
+    if (check_isroot && txn_row->table->schema->is_root) {
         return NULL;
     }
 
@@ -392,7 +394,7 @@ static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 collect_garbage(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
 {
     if (txn_row->new && !txn_row->n_refs) {
-        return delete_garbage_row(txn, txn_row);
+        return delete_garbage_row(txn, txn_row, true);
     }
     return NULL;
 }
@@ -553,7 +555,12 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
             ovsdb_datum_sort_assert(datum, column->type.key.type);
             if (datum->n < column->type.n_min) {
                 const struct uuid *row_uuid = ovsdb_row_get_uuid(txn_row->new);
-                if (zero && !txn_row->old) {
+                /* Garbage collect root table rows if weak_gc applies */
+                if ((table->schema->is_root && (txn_row->n_refs == 0)) &&
+                    (ovsdb_base_type_is_weak_gc_ref(&column->type.value) ||
+                     ovsdb_base_type_is_weak_gc_ref(&column->type.key))) {
+                    return delete_garbage_row(txn, txn_row, false);
+                } else if (zero && !txn_row->old) {
                     return ovsdb_error(
                         "constraint violation",
                         "Weak reference column \"%s\" in \"%s\" row "UUID_FMT
@@ -726,6 +733,29 @@ duplicate_index_row(const struct ovsdb_column_set *index,
     return error;
 }
 
+/* Check if the column_set has a column with weak_gc reference
+ * and if the number of entries in that column is 0.
+ */
+static bool
+columns_has_null_weak_gc_ref(const struct ovsdb_row *row,
+                             const struct ovsdb_column_set *columns)
+{
+    size_t i;
+    const struct ovsdb_column *column;
+    const struct ovsdb_datum *datum;
+
+    for (i = 0; i < columns->n_columns; i++) {
+        column = columns->columns[i];
+        datum = &row->fields[column->index];
+        if ((ovsdb_base_type_is_weak_gc_ref(&column->type.value) ||
+             ovsdb_base_type_is_weak_gc_ref(&column->type.key)) &&
+             (datum->n == 0)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 check_index_uniqueness(struct ovsdb_txn *txn OVS_UNUSED,
                        struct ovsdb_txn_row *txn_row)
@@ -747,12 +777,24 @@ check_index_uniqueness(struct ovsdb_txn *txn OVS_UNUSED,
         hash = ovsdb_row_hash_columns(row, index, 0);
         irow = ovsdb_index_search(&txn_table->txn_indexes[i], row, i, hash);
         if (irow) {
-            return duplicate_index_row(index, irow, row);
+            if ((table->schema->is_root && txn_row->n_refs == 0) &&
+                columns_has_null_weak_gc_ref(row, index)) {
+                /* Garbage collect root table rows if weak_gc applies */
+                return delete_garbage_row(txn, txn_row, false);
+            } else {
+                return duplicate_index_row(index, irow, row);
+            }
         }
 
         irow = ovsdb_index_search(&table->indexes[i], row, i, hash);
         if (irow && !irow->txn_row) {
-            return duplicate_index_row(index, irow, row);
+            if ((table->schema->is_root && txn_row->n_refs == 0) &&
+                columns_has_null_weak_gc_ref(row, index)) {
+                /* Garbage collect root table rows if weak_gc applies */
+                return delete_garbage_row(txn, txn_row, false);
+            } else {
+                return duplicate_index_row(index, irow, row);
+            }
         }
 
         hmap_insert(&txn_table->txn_indexes[i],

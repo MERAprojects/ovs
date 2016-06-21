@@ -195,9 +195,9 @@ class BaseType(object):
             if base.ref_table_name:
                 base.ref_type = parser.get_optional("refType", [str, unicode],
                                                    "strong")
-                if base.ref_type not in ['strong', 'weak']:
-                    raise error.Error('refType must be "strong" or "weak" '
-                                      '(not "%s")' % base.ref_type)
+                if base.ref_type not in ['strong', 'weak', 'weak_gc']:
+                    raise error.Error('refType must be "strong", "weak" or '
+                                      '"weak_gc" (not "%s")' % base.ref_type)
         parser.finish()
 
         return base
@@ -271,13 +271,19 @@ class BaseType(object):
         return self.is_ref() and self.ref_type == 'strong'
 
     def is_weak_ref(self):
-        return self.is_ref() and self.ref_type == 'weak'
+        return self.is_ref() and (self.ref_type == 'weak' or
+                                  self.ref_type == 'weak_gc')
+
+    def is_weak_gc_ref(self):
+        return self.is_ref() and self.ref_type == 'weak_gc'
 
     def toEnglish(self, escapeLiteral=returnUnchanged):
         if self.type == UuidType and self.ref_table_name:
             s = escapeLiteral(self.ref_table_name)
             if self.ref_type == 'weak':
                 s = "weak reference to " + s
+            if self.ref_type == 'weak_gc':
+                s = "weak_gc reference to " + s
             return s
         else:
             return self.type.to_string()

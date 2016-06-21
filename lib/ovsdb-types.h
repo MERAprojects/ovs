@@ -46,7 +46,11 @@ struct json *ovsdb_atomic_type_to_json(enum ovsdb_atomic_type);
 
 enum ovsdb_ref_type {
     OVSDB_REF_STRONG,           /* Target must exist. */
-    OVSDB_REF_WEAK              /* Delete reference if target disappears. */
+    OVSDB_REF_WEAK,             /* Delete reference if target disappears. */
+    OVSDB_REF_WEAK_GC           /* Delete reference if target disappears and
+                                   if the deletion results in constraint
+                                   violation, garbage collect the referencing
+                                   row. */
 };
 
 struct ovsdb_base_type {
@@ -190,7 +194,15 @@ static inline bool
 ovsdb_base_type_is_weak_ref(const struct ovsdb_base_type *base)
 {
     return (ovsdb_base_type_is_ref(base)
-            && base->u.uuid.refType == OVSDB_REF_WEAK);
+            && (base->u.uuid.refType == OVSDB_REF_WEAK ||
+                base->u.uuid.refType == OVSDB_REF_WEAK_GC));
+}
+
+static inline bool
+ovsdb_base_type_is_weak_gc_ref(const struct ovsdb_base_type *base)
+{
+    return (ovsdb_base_type_is_ref(base)
+            && base->u.uuid.refType == OVSDB_REF_WEAK_GC);
 }
 
 static inline bool ovsdb_type_is_scalar(const struct ovsdb_type *type)

@@ -298,6 +298,7 @@ ovsdb_symbol_referenced(struct ovsdb_symbol *symbol,
             symbol->strong_ref = true;
             break;
         case OVSDB_REF_WEAK:
+        case OVSDB_REF_WEAK_GC:
             symbol->weak_ref = true;
             break;
         }

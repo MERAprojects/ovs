@@ -436,9 +436,12 @@ ovsdb_base_type_from_json(struct ovsdb_base_type *base,
                     base->u.uuid.refType = OVSDB_REF_STRONG;
                 } else if (!strcmp(refType_s, "weak")) {
                     base->u.uuid.refType = OVSDB_REF_WEAK;
+                } else if (!strcmp(refType_s, "weak_gc")) {
+                    base->u.uuid.refType = OVSDB_REF_WEAK_GC;
                 } else {
                     error = ovsdb_syntax_error(json, NULL, "refType must be "
-                                               "\"strong\" or \"weak\" (not "
+                                               "\"strong\" or \"weak\" or "
+                                               "\"weak_gc\" (not "
                                                "\"%s\")", refType_s);
                 }
             } else {
@@ -525,6 +528,9 @@ ovsdb_base_type_to_json(const struct ovsdb_base_type *base)
                                    base->u.uuid.refTableName);
             if (base->u.uuid.refType == OVSDB_REF_WEAK) {
                 json_object_put_string(json, "refType", "weak");
+            }
+            if (base->u.uuid.refType == OVSDB_REF_WEAK_GC) {
+                json_object_put_string(json, "refType", "weak_gc");
             }
         }
         break;
