@@ -263,6 +263,9 @@ usage(void)
            "    in DATBASE on SERVER.\n"
            "\n  dump [SERVER] [DATABASE] [TABLE [COLUMN]...]\n"
            "    dump contents of DATABASE on SERVER to stdout\n"
+           "\n  identify [name]\n"
+           "    identify the session on the SERVER, and returns the assigned\n"
+           "    priority.\n"
            "\nThe default SERVER is unix:%s/db.sock.\n"
            "The default DATABASE is Open_vSwitch.\n",
            program_name, program_name, ovs_rundir());
@@ -511,6 +514,34 @@ do_transact(struct jsonrpc *rpc, const char *database OVS_UNUSED,
     putchar('\n');
     jsonrpc_msg_destroy(reply);
 }
+
+static void
+do_identify(struct jsonrpc *rpc, const char *database OVS_UNUSED,
+            int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    struct jsonrpc_msg *request, *reply;
+    struct json *req;
+    req = json_object_create();
+    json_object_put_string(req, "name", argv[0]);
+    request = jsonrpc_create_request("identify",
+                                     json_array_create_1(req),
+                                     NULL);
+
+    check_txn(jsonrpc_transact_block(rpc, request, &reply), &reply);
+    if (reply->result->type != JSON_OBJECT) {
+        ovs_fatal(0, "identify response is not array");
+    }
+
+    struct json *response = shash_find_data(reply->result->u.object,
+                                            "priority");
+    if (!response) {
+        ovs_fatal(0, "identify response doesn't have a priority key");
+    }
+    printf("%"PRId64"\n", json_integer(response));
+
+    jsonrpc_msg_destroy(reply);
+}
+
 
 /* "monitor" command. */
 
@@ -1177,7 +1208,7 @@ static const struct ovsdb_client_command all_commands[] = {
     { "transact",           NEED_RPC,      1, 1,       do_transact },
     { "monitor",            NEED_DATABASE, 1, INT_MAX, do_monitor },
     { "dump",               NEED_DATABASE, 0, INT_MAX, do_dump },
-
+    { "identify",           NEED_RPC,      1, 2,       do_identify },
     { "help",               NEED_NONE,     0, INT_MAX, do_help },
 
     { NULL,                 0,             0, 0,       NULL },

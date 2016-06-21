@@ -105,6 +105,11 @@ struct ovsdb_idl {
     unsigned int state_seqno;
     enum ovsdb_idl_state state;
     struct json *request_id;
+    uint8_t session_priority;         /* Priority assigned by the server */
+    struct uuid server_uuid;          /* UUID of the server */
+    char *session_name;               /* Identifier of this sessions */
+    struct json *identify_request_id; /* JSON-RPC ID of in-flight identify
+                                       * request. */
 
     /* Database locking. */
     char *lock_name;            /* Name of lock we need, NULL if none. */
@@ -153,6 +158,7 @@ static struct vlog_rate_limit syntax_rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static struct vlog_rate_limit semantic_rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 static void ovsdb_idl_clear(struct ovsdb_idl *);
+static void ovsdb_idl_send_identify(struct ovsdb_idl *);
 static void ovsdb_idl_send_schema_request(struct ovsdb_idl *);
 static void ovsdb_idl_send_monitor_request(struct ovsdb_idl *,
                                            const struct json *schema_json);
@@ -201,6 +207,8 @@ static void ovsdb_idl_txn_add_map_op(struct ovsdb_idl_row *,
 
 static void ovsdb_idl_send_lock_request(struct ovsdb_idl *);
 static void ovsdb_idl_send_unlock_request(struct ovsdb_idl *);
+static void ovsdb_idl_parse_identify_reply(struct ovsdb_idl *,
+                                           const struct json *);
 static void ovsdb_idl_parse_lock_reply(struct ovsdb_idl *,
                                        const struct json *);
 static void ovsdb_idl_parse_lock_notify(struct ovsdb_idl *,
@@ -254,6 +262,7 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class,
     idl = xzalloc(sizeof *idl);
     idl->class = class;
     idl->session = jsonrpc_session_open(remote, retry);
+    idl->session_priority = IDL_PRIORITY_UNDEFINED;
     shash_init(&idl->table_by_name);
     idl->tables = xmalloc(class->n_tables * sizeof *idl->tables);
     for (i = 0; i < class->n_tables; i++) {
@@ -287,6 +296,7 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class,
 
     idl->state_seqno = UINT_MAX;
     idl->request_id = NULL;
+    idl->session_name = NULL;
 
     hmap_init(&idl->outstanding_txns);
     hmap_init(&idl->outstanding_fetch_reqs);
@@ -317,6 +327,7 @@ ovsdb_idl_destroy(struct ovsdb_idl *idl)
         free(idl->tables);
         json_destroy(idl->request_id);
         free(idl->lock_name);
+        json_destroy(idl->identify_request_id);
         json_destroy(idl->lock_request_id);
         hmap_destroy(&idl->outstanding_txns);
         hmap_destroy(&idl->outstanding_fetch_reqs);
@@ -367,6 +378,50 @@ ovsdb_idl_clear(struct ovsdb_idl *idl)
     }
 }
 
+/* Identifies the client within the OVSDB Server.
+ * It must be called after the initial replica is
+ * received.
+ */
+void
+ovsdb_idl_set_identity(struct ovsdb_idl *idl, char* name)
+{
+    idl->session_name = name;
+    ovsdb_idl_send_identify(idl);
+}
+
+static void
+ovsdb_idl_send_identify(struct ovsdb_idl *idl)
+{
+    if (idl->session_name) {
+        idl->session_priority = IDL_PRIORITY_UNDEFINED;
+        struct jsonrpc_msg *msg;
+        struct json *params = json_object_create();
+        json_destroy(idl->identify_request_id);
+
+        json_object_put_string(params, "name", idl->session_name);
+
+        msg = jsonrpc_create_request(
+            "identify",
+            json_array_create_1(params),
+            &idl->identify_request_id);
+        jsonrpc_session_send(idl->session, msg);
+    }
+}
+
+/* Returns the current priority assigned to the IDL session */
+uint8_t
+ovsdb_idl_get_priority(struct ovsdb_idl *idl)
+{
+    return idl->session_priority;
+}
+
+/* Returns the server's uuid */
+struct uuid *
+ovsdb_idl_get_server_uuid(struct ovsdb_idl *idl)
+{
+    return &idl->server_uuid;
+}
+
 /* Processes a batch of messages from the database server on 'idl'.  This may
  * cause the IDL's contents to change.  The client may check for that with
  * ovsdb_idl_get_seqno(). */
@@ -390,6 +445,8 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
             ovsdb_idl_txn_abort_all(idl);
 
             ovsdb_idl_send_schema_request(idl);
+            ovsdb_idl_send_identify(idl);
+
             idl->state = IDL_S_SCHEMA_REQUESTED;
             if (idl->lock_name) {
                 ovsdb_idl_send_lock_request(idl);
@@ -436,11 +493,15 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
                 ovsdb_idl_clear(idl);
                 ovsdb_idl_parse_update(idl, msg->result);
                 break;
-
             case IDL_S_MONITORING:
             default:
                 OVS_NOT_REACHED();
             }
+        } else if (msg->type == JSONRPC_REPLY
+                   && idl->identify_request_id
+                   && json_equal(idl->identify_request_id, msg->id)) {
+            /* Reply to our "identify" request */
+            ovsdb_idl_parse_identify_reply(idl, msg->result);
         } else if (msg->type == JSONRPC_REPLY
                    && idl->lock_request_id
                    && json_equal(idl->lock_request_id, msg->id)) {
@@ -3867,6 +3928,28 @@ static void
 ovsdb_idl_send_unlock_request(struct ovsdb_idl *idl)
 {
     ovsdb_idl_send_lock_request__(idl, "unlock", NULL);
+}
+
+static void
+ovsdb_idl_parse_identify_reply(struct ovsdb_idl *idl, const struct json *result)
+{
+    json_destroy(idl->identify_request_id);
+    idl->identify_request_id = NULL;
+    if (result->type == JSON_OBJECT) {
+        const struct json *asigned_priority;
+        asigned_priority = shash_find_data(
+                           result->u.object,
+                           "priority");
+        if (!asigned_priority) {
+            VLOG_ERR("Identify response with invalid format");
+        }
+        idl->session_priority = json_integer(asigned_priority);
+        const struct json *server_uuid;
+        server_uuid = shash_find_data(result->u.object, "uuid");
+        uuid_from_string(&idl->server_uuid, json_string(server_uuid));
+    } else {
+        VLOG_ERR("Identify response with invalid format");
+    }
 }
 
 static void

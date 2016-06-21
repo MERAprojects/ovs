@@ -768,6 +768,52 @@ AT_CHECK_UNQUOTED([ovs-vsctl get open_vswitch . system_version], [0],
   ["xyzzy$counter"
 ])
 AT_CLEANUP
+
+
+AT_SETUP([ovsdb-client priority])
+AT_KEYWORDS([ovsdb server priority_session positive])
+ordinal_schema > schema
+AT_DATA([priority.json], [[
+{
+"0": ["maxp"],
+"5": ["example"],
+"15": ["minp"],
+"20": ["wrongp"]
+}
+]])
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --unixctl="`pwd`"/unixctl --remote=punix:socket db --priority-file="`pwd`"/priority.json], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-client identify unix:socket example], [0], [5
+])
+AT_CHECK([ovsdb-client identify unix:socket minp], [0], [15
+])
+AT_CHECK([ovsdb-client identify unix:socket maxp], [0], [0
+])
+AT_CHECK([ovsdb-client identify unix:socket default], [0], [8
+])
+AT_CHECK([ovsdb-client identify unix:socket wrongp], [0], [8
+])
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
+
+AT_SETUP([ovs-appctl priority])
+AT_KEYWORDS([ovsdb server priority_session positive])
+ordinal_schema > schema
+AT_DATA([priority.json], [[{"5": ["example"]}
+]])
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --unixctl="`pwd`"/unixctl --remote=punix:socket db --priority-file="`pwd`"/priority.json], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-client identify unix:socket example], [0], [5
+])
+AT_DATA([priority.json], [[{"9": ["example"]}
+]])
+AT_CHECK([ovs-appctl -t "`pwd`"/unixctl ovsdb-server/priority-reload], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-client identify unix:socket example], [0], [9
+])
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
+
+
 
 AT_BANNER([OVSDB -- ovsdb-server transactions (SSL IPv4 sockets)])
 

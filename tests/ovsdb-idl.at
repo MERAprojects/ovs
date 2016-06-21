@@ -777,6 +777,8 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
 015: done
 ]])
 
+
+
 if HALON
 m4_define([OVSDB_CHECK_IDL_INFO_C],
   [AT_SETUP([$1 - C])
@@ -847,3 +849,29 @@ OVSDB_CHECK_IDL_DELETE_SEQNO_C([simple idl, table delete seqno increment],
 003: done
 ]])
 endif
+
+
+m4_define([OVSDB_CHECK_IDL_PRIORITY_SESSION_C],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl priority_session positive $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_DATA([priority.json], [[
+   {
+   "0": ["maxp"],
+   "5": ["example"],
+   "15": ["minp"],
+   "20": ["wrongp"]
+   }
+]])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db --priority-file="`pwd`"/priority.json], [0], [stdout], [stderr])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-priority-session unix:socket],
+            [0], [[example: 5
+maxp: 0
+minp: 15
+wrongp: 8
+]], [ignore], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_IDL_PRIORITY_SESSION_C([ovsdb idl priority sessions])

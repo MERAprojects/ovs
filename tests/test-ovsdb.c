@@ -197,7 +197,10 @@ usage(void)
            "    connect to SERVER and dump the contents of the database\n"
            "    as seen initially by the IDL implementation and after\n"
            "    executing each TRANSACTION.  (Each TRANSACTION must modify\n"
-           "    the database or this command will hang.)\n",
+           "    the database or this command will hang.)\n"
+           "  idl-priority-session\n"
+           "    Changes the identification of the session, and verifies the\n"
+           "    priorities returned by the OVSDB-Server.",
            program_name, program_name);
     vlog_usage();
     printf("\nOther options:\n"
@@ -2112,6 +2115,31 @@ do_idl(struct ovs_cmdl_context *ctx)
     printf("%03d: done\n", step);
 }
 
+static void
+do_idl_priority_session(struct ovs_cmdl_context *ctx)
+{
+    struct ovsdb_idl *idl;
+    idltest_init();
+
+    idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, false, true);
+    setvbuf(stdout, NULL, _IONBF, 0);
+    ovsdb_idl_get_initial_snapshot(idl);
+
+    char *ids[] = {"example", "maxp", "minp", "wrongp"};
+    int i;
+
+    for(i = 0; i < sizeof(ids)/sizeof(*ids); i++){
+        ovsdb_idl_set_identity(idl, ids[i]);
+        while (ovsdb_idl_get_priority(idl) == IDL_PRIORITY_UNDEFINED) {
+            ovsdb_idl_wait(idl);
+            poll_block();
+            ovsdb_idl_run(idl);
+        }
+        printf("%s: %u\n", ids[i], ovsdb_idl_get_priority(idl));
+    }
+}
+
+
 static struct ovs_cmdl_command all_commands[] = {
     { "log-io", NULL, 2, INT_MAX, do_log_io },
     { "default-atoms", NULL, 0, 0, do_default_atoms },
@@ -2139,8 +2167,9 @@ static struct ovs_cmdl_command all_commands[] = {
     { "execute", NULL, 2, INT_MAX, do_execute },
     { "trigger", NULL, 2, INT_MAX, do_trigger },
     { "idl", NULL, 1, INT_MAX, do_idl },
+    { "idl-priority-session", NULL, 1, 1, do_idl_priority_session },
     { "help", NULL, 0, INT_MAX, do_help },
-    { NULL, NULL, 0, 0, NULL },
+    { NULL, NULL, 0, 0, NULL }
 };
 
 static struct ovs_cmdl_command *
