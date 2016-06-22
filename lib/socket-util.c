@@ -46,10 +46,80 @@
 #include "netlink-socket.h"
 #endif
 
+#ifdef OPS
+#define OPS_SWITCH_NAMESPACE   "swns"
+#define OPS_MAX_BUFFER_SIZE    128
+#endif
+
 VLOG_DEFINE_THIS_MODULE(socket_util);
 
 static int getsockopt_int(int fd, int level, int option, const char *optname,
                           int *valuep);
+
+#ifdef OPS
+/***************************************************************************
+ * enters OOBM namespace
+ *
+ * @return 0 if sucessful, else negative value on failure
+ ***************************************************************************/
+static int ops_setns_oobm (void)
+{
+    int fd = -1;
+    char ns_path[OPS_MAX_BUFFER_SIZE] = {0};
+
+    snprintf(ns_path, OPS_MAX_BUFFER_SIZE, "/proc/1/ns/net");
+    fd = open(ns_path, O_RDONLY);
+    if (fd == -1)
+    {
+        VLOG_ERR("Entering mgmt OOBM namespace: errno %d", errno);
+        return -1;
+    }
+
+    if (setns(fd, CLONE_NEWNET) == -1) /* Join that namespace */
+    {
+        VLOG_ERR("Unable to enter the mgmt OOBM namespace, errno %d", errno);
+        close(fd);
+        return -1;
+    }
+    close(fd);
+    return 0;
+}
+
+/***************************************************************************
+ * enters a namespace with the given ns name
+ *
+ * @param[in]  ns_name  : the namespace name corresponding to given namespace.
+ *
+ * @return 0 if sucessful, else negative value on failure
+ ***************************************************************************/
+static int ops_setns_with_name (const char *ns_name)
+{
+     int fd = -1;
+     char ns_path[OPS_MAX_BUFFER_SIZE] = {0};
+
+     strcat(ns_path, "/var/run/netns/");
+     snprintf(ns_path + strlen(ns_path), OPS_MAX_BUFFER_SIZE - strlen(ns_path) - 1,
+                                                                 "%s", ns_name);
+     fd = open(ns_path, O_RDONLY);  /* Get descriptor for namespace */
+     if (fd == -1)
+     {
+         VLOG_ERR("%s: namespace does not exist, errno %d\n", ns_name, errno);
+         return -1;
+     }
+
+     if (setns(fd, CLONE_NEWNET) == -1) /* Join that namespace */
+     {
+         VLOG_ERR("Unable to set namespace %s in the thread, error %d",
+                    ns_name, errno);
+         close(fd);
+         return -1;
+     }
+
+    close(fd);
+    return 0;
+}
+
+#endif
 
 /* Sets 'fd' to non-blocking mode.  Returns 0 if successful, otherwise a
  * positive errno value. */
@@ -459,9 +529,19 @@ inet_open_active(int style, const char *target, uint16_t default_port,
         error = EAFNOSUPPORT;
         goto exit;
     }
+#ifdef OPS
+    /* Switch to Management namespace */
+    ops_setns_oobm ();
+#endif
 
     /* Create non-blocking socket. */
     fd = socket(ss.ss_family, style, 0);
+
+#ifdef OPS
+    /* Switch to Switch namespace */
+    ops_setns_with_name(OPS_SWITCH_NAMESPACE);
+#endif
+
     if (fd < 0) {
         error = sock_errno();
         VLOG_ERR("%s: socket: %s", target, sock_strerror(error));
@@ -587,8 +667,19 @@ inet_open_passive(int style, const char *target, int default_port,
     }
     kernel_chooses_port = ss_get_port(&ss) == 0;
 
+#ifdef OPS
+    /* Switch to Management namespace */
+    ops_setns_oobm ();
+#endif
+
     /* Create non-blocking socket, set SO_REUSEADDR. */
     fd = socket(ss.ss_family, style, 0);
+
+#ifdef OPS
+    /* Switch to Switch namespace */
+    ops_setns_with_name(OPS_SWITCH_NAMESPACE);
+#endif
+
     if (fd < 0) {
         error = sock_errno();
         VLOG_ERR("%s: socket: %s", target, sock_strerror(error));

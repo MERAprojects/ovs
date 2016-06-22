@@ -1,15 +1,10 @@
-if OPS
-bin_PROGRAMS += \
-	utilities/ovs-appctl \
-	utilities/ovs-vsctl
-else
 bin_PROGRAMS += \
 	utilities/ovs-appctl \
 	utilities/ovs-testcontroller \
 	utilities/ovs-dpctl \
 	utilities/ovs-ofctl \
 	utilities/ovs-vsctl
-endif
+
 bin_SCRIPTS += utilities/ovs-docker \
 	utilities/ovs-pki
 if HAVE_PYTHON
@@ -131,7 +126,6 @@ man_MANS += \
 utilities_ovs_appctl_SOURCES = utilities/ovs-appctl.c
 utilities_ovs_appctl_LDADD = lib/libovscommon.la ovsdb/libovsdb.la
 
-if !OPS
 utilities_ovs_testcontroller_SOURCES = utilities/ovs-testcontroller.c
 utilities_ovs_testcontroller_LDADD = lib/libovscommon.la ovsdb/libovsdb.la lib/libopenvswitch.la $(SSL_LIBS)
 
@@ -144,10 +138,9 @@ utilities_ovs_ofctl_LDADD = \
 	lib/libovscommon.la \
 	ovsdb/libovsdb.la \
 	lib/libopenvswitch.la
-endif
 
 utilities_ovs_vsctl_SOURCES = utilities/ovs-vsctl.c
-utilities_ovs_vsctl_LDADD = lib/libovscommon.la ovsdb/libovsdb.la
+utilities_ovs_vsctl_LDADD = lib/libovscommon.la ovsdb/libovsdb.la lib/libopenvswitch.la
 
 if LINUX
 sbin_PROGRAMS += utilities/ovs-vlan-bug-workaround

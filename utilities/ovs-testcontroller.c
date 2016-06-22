@@ -147,7 +147,11 @@ main(int argc, char *argv[])
         ovs_fatal(0, "no active or passive switch connections");
     }
 
+#ifdef OPS
+    daemonize_start();
+#else
     daemonize_start(false);
+#endif
 
     retval = unixctl_server_create(unixctl_path, &unixctl);
     if (retval) {

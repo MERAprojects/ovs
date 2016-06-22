@@ -1616,7 +1616,11 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests)
     int error;
 
     daemon_save_fd(STDERR_FILENO);
+#ifdef OPS
+    daemonize_start();
+#else
     daemonize_start(false);
+#endif
     error = unixctl_server_create(unixctl_path, &server);
     if (error) {
         ovs_fatal(error, "failed to create unixctl server");
