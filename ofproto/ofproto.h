@@ -63,6 +63,11 @@ struct ofproto_controller_info {
     struct smap pairs;
 };
 
+struct ofproto_mirror_bundle {
+    struct ofproto *ofproto;
+    void *aux;
+};
+
 struct ofproto_sflow_options {
     struct sset targets;
     uint32_t sampling_rate;
