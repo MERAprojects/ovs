@@ -18,6 +18,8 @@
 
 #include <stdbool.h>
 #include "openvswitch/types.h"
+#include "ovsdb.h"
+#include "jsonrpc.h"
 
 struct ovsdb;
 struct shash;
@@ -78,6 +80,12 @@ void ovsdb_jsonrpc_server_get_memory_usage(const struct ovsdb_jsonrpc_server *,
 
 struct ovsdb_jsonrpc_monitor;
 void ovsdb_jsonrpc_monitor_destroy(struct ovsdb_jsonrpc_monitor *);
+
+struct ovsdb_jsonrpc_session;
+void ovsdb_jsonrpc_server_session_send(struct ovsdb_jsonrpc_session *,
+                                       struct jsonrpc_msg *);
+void ovsdb_jsonrpc_blocking_wait_add_to_txn(struct ovsdb_jsonrpc_session *,
+                                            struct ovsdb_txn_ctx *);
 
 enum ovsdb_priority {
     OVSDB_PRIORITY_UNDEFINED = -1,

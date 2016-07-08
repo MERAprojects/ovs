@@ -22,6 +22,7 @@
 #include "column.h"
 #include "dynamic-string.h"
 #include "json.h"
+#include "list.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
 #include "table.h"
@@ -39,6 +40,7 @@ ovsdb_column_create(const char *name,
     column->name = xstrdup(name);
     column->mutable = mutable;
     column->persistent = persistent;
+    list_init(&column->wait_monitoring);
     ovsdb_type_clone(&column->type, type);
 
     return column;

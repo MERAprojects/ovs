@@ -59,6 +59,9 @@ struct ovsdb_idl_column {
     char *name;
     struct ovsdb_type type;
     bool mutable;
+    bool wait_monitored;
+    struct ovs_list wait_monitor_change;
+    struct ovs_list wait_list;
     void (*parse)(struct ovsdb_idl_row *, const struct ovsdb_datum *);
     void (*unparse)(struct ovsdb_idl_row *);
     int (*compare)(const void *, const void *); /* Perform a comparison over ovsrec_* */

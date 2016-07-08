@@ -16,6 +16,7 @@
 #ifndef OVSDB_OVSDB_H
 #define OVSDB_OVSDB_H 1
 
+#include "column.h"
 #include "compiler.h"
 #include "hmap.h"
 #include "list.h"
@@ -59,9 +60,44 @@ struct ovsdb {
     struct ovs_list replicas;   /* Contains "struct ovsdb_replica"s. */
     struct shash tables;        /* Contains "struct ovsdb_table *"s. */
 
+    /* Transaction Context */
+    struct hmap contexts; /* Contains "struct ovsdb_txn_ctx"s. */
+
     /* Triggers. */
     struct ovs_list triggers;   /* Contains "struct ovsdb_trigger"s. */
+    /* TODO: what data structure fits best here?
+     * It will be storing ids and a counter?
+     */
+    struct hmap blocked_waits; /* Contains "struct ovsdb_blocked_wait"s.*/
+    size_t blocked_wait_id; /* Used to generate the blocked wait ids. */
+
     bool run_triggers;
+};
+
+struct ovsdb_txn_ctx {
+    struct hmap_node node;
+    const struct ovsdb *db;
+    const struct ovsdb_session *session;
+    const struct json *params;
+
+    /* General operation data */
+    size_t current_operation; /* Current operation index */
+    size_t max_successful_operation; /* Max operation index reached ever */
+
+    /* blocking_wait */
+    struct ovs_list blocking_sessions;
+    long long int blocking_wait_id;
+    bool blocking_wait_id_is_set;
+    bool blocking_wait_aborted;
+};
+
+/* struct ctx_to_session allows to model the relation between a transaction
+ * (transaction's context) and a session wait blocking that transaction.     */
+struct ctx_to_session {
+    struct ovs_list node_ctx;
+    struct ovs_list node_session;
+    struct ovsdb_txn_ctx *ctx;
+    struct ovsdb_jsonrpc_session *session;
 };
 
 struct ovsdb *ovsdb_create(struct ovsdb_schema *);
@@ -75,6 +111,12 @@ struct json *ovsdb_execute(struct ovsdb *, const struct ovsdb_session *,
                            const struct json *params,
                            long long int elapsed_msec,
                            long long int *timeout_msec);
+struct ovsdb_txn_ctx *ovsdb_get_context(const struct ovsdb *,
+                                        const struct json *);
+struct ovsdb_txn_ctx *ovsdb_create_context(const struct ovsdb *,
+                                           const struct json *params);
+void ovsdb_destroy_context(const struct ovsdb *db, const struct json *params);
+
 
 /* Database replication. */
 
@@ -94,5 +136,23 @@ void ovsdb_replica_init(struct ovsdb_replica *,
 
 void ovsdb_add_replica(struct ovsdb *, struct ovsdb_replica *);
 void ovsdb_remove_replica(struct ovsdb *, struct ovsdb_replica *);
+
+/* Wait monitor */
+struct wait_monitored_data {
+
+    struct ovsdb_jsonrpc_session *session;
+    bool wait_updated;                    /* Indicates if request sent to this session was responded */
+    struct uuid *uuid;
+    size_t uuid_n;
+    struct ovsdb_column_set columns;
+    struct hmap_node hmap_node;
+};
+
+struct blocked_wait {
+    struct hmap_node node;
+    long long int wait_id;
+    int sessions_n;
+    struct hmap wait_monitored_data; /* "struct wait_monitored_data" hashed by "struct ovsdb_jsonrpc_session *" */
+};
 
 #endif /* ovsdb/ovsdb.h */
