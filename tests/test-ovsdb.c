@@ -22,6 +22,8 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
 
 #include "command-line.h"
 #include "dynamic-string.h"
@@ -50,9 +52,14 @@
 #include "timeval.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
+#include "vswitch-idl.h"
 
 struct test_ovsdb_pvt_context {
     bool track;
+    bool no_rows;
+    bool no_columns;
+    bool not_monitored_cell;
+    unsigned long int wait_block_timeout;
 };
 
 OVS_NO_RETURN static void usage(void);
@@ -80,6 +87,10 @@ parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
         {"timeout", required_argument, NULL, 't'},
         {"verbose", optional_argument, NULL, 'v'},
         {"change-track", optional_argument, NULL, 'c'},
+        {"wait-block-timeout", optional_argument, NULL, 'w'},
+        {"cell-not-monitored", optional_argument, NULL, 'p'},
+        {"no-rows", optional_argument, NULL, 'r'},
+        {"no-columns", optional_argument, NULL, 'm'},
         {"help", no_argument, NULL, 'h'},
         {NULL, 0, NULL, 0},
     };
@@ -87,6 +98,7 @@ parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
 
     for (;;) {
         unsigned long int timeout;
+        unsigned long int wait_block_timeout;
         int c;
 
         c = getopt_long(argc, argv, short_options, long_options, NULL);
@@ -114,6 +126,23 @@ parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
 
         case 'c':
             pvt->track = true;
+            break;
+
+        case 'p':
+            pvt->not_monitored_cell = true;
+            break;
+
+        case 'w':
+            wait_block_timeout = strtoul(optarg, NULL, 10);
+            pvt->wait_block_timeout = wait_block_timeout;
+            break;
+
+        case 'r':
+            pvt->no_rows = true;
+            break;
+
+        case 'm':
+            pvt->no_columns = true;
             break;
 
         case '?':
@@ -2694,6 +2723,364 @@ do_idl_compound_index(struct ovs_cmdl_context *ctx)
     printf("%03d: done\n", step);
 }
 
+/* Write the response time, the producer already write a valid response.
+ * 'update_counters' specifies if the function must update the counters or not.
+ * Updates the record of the current counters requests ('rec_request'). */
+static enum ovsdb_idl_txn_status
+update_data(struct ovsdb_idl *idl,
+             struct shash *rows,
+             struct shash *cols OVS_UNUSED,
+             int wait_monitorers)
+{
+    struct ovsdb_idl_txn *txn;
+    enum ovsdb_idl_txn_status status;
+    bool state = false;
+    struct uuid uuid;
+    const int64_t i_array[2] = {1, 2};
+    const char *s_array[2] = {"test1", "test2"};
+    const double r_array[] = {1.0, 2.0};
+    struct uuid u_array[2];
+
+    /* Update columns */
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, rows) {
+        const struct idltest_simple *row = idltest_simple_get_for_uuid(idl, node->data);
+        do {
+            txn = ovsdb_idl_txn_create(idl);
+            switch (wait_monitorers) {
+                case 0:
+                    idltest_simple_set_b(row, false);
+                    idltest_simple_set_ba(row, &state, 3);
+                    idltest_simple_set_i(row, 24);
+                    idltest_simple_set_s(row, "test");
+                break;
+                case 1:
+                    uuid_generate(&uuid);
+                    idltest_simple_set_r(row, 1.6);
+                    idltest_simple_set_u(row, uuid);
+                    idltest_simple_set_ra(row, r_array, sizeof(r_array)/sizeof(r_array[0]));
+                    break;
+                case 2:
+                    uuid_generate(&u_array[0]);
+                    uuid_generate(&u_array[1]);
+                    idltest_simple_set_ia(row, i_array, sizeof(i_array)/sizeof(i_array[0]));
+                    idltest_simple_set_sa(row, s_array, sizeof(s_array)/sizeof(s_array[0]));
+                    idltest_simple_set_ua(row, u_array, sizeof(u_array)/sizeof(u_array[0]));
+                break;
+            }
+
+            status = ovsdb_idl_txn_commit_block(txn);
+            ovsdb_idl_txn_destroy(txn);
+        } while (status != TXN_SUCCESS && status != TXN_UNCHANGED);
+    }
+
+    return status;
+}
+
+#define WAIT_MONITOR_FREQUENCY_1       1
+#define WAIT_MONITOR_FREQUENCY_3       3
+#define WAIT_MONITOR_FREQUENCY_6       6
+
+static void
+wait_monitor_session(
+        struct ovs_cmdl_context *ctx,
+        int wait_monitorer,
+        bool enable_periodicity,
+        bool not_wait_monitored_cell)
+{
+    unsigned int frequency;
+    struct ovsdb_idl *idl;
+
+    idltest_init();
+    idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, false, true);
+    ovsdb_idl_add_table(idl, &idltest_table_simple);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_b);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_ba);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_i);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_s);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_r);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_u);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_ra);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_ia);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_sa);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_ua);
+    ovsdb_idl_get_initial_snapshot(idl);
+    ovsdb_idl_run(idl);
+
+    /* send wait monitor request */
+    enum ovsdb_idl_wait_monitor_status status = ovsdb_idl_wait_monitor_status(idl);
+    struct ovsdb_idl_wait_monitor_request wait_req;
+    ovsdb_idl_wait_monitor_create_txn(idl, &wait_req);
+
+    /* code common to the 3 monitoring sessions used.
+     * Each session updates two columns
+     * specified on each case
+     */
+    switch (wait_monitorer) {
+        case 0:
+            frequency = WAIT_MONITOR_FREQUENCY_1;
+            ovsdb_idl_wait_monitor_add_column(
+                    &wait_req, &idltest_table_simple, &idltest_simple_col_b);
+            ovsdb_idl_wait_monitor_add_column(
+                    &wait_req, &idltest_table_simple, &idltest_simple_col_ba);
+            ovsdb_idl_wait_monitor_add_column(
+                    &wait_req, &idltest_table_simple, &idltest_simple_col_i);
+            ovsdb_idl_wait_monitor_add_column(
+                    &wait_req, &idltest_table_simple, &idltest_simple_col_s);
+        break;
+        case 1:
+            frequency = WAIT_MONITOR_FREQUENCY_3;
+            ovsdb_idl_wait_monitor_add_column(
+                    &wait_req, &idltest_table_simple, &idltest_simple_col_r);
+            ovsdb_idl_wait_monitor_add_column(
+                    &wait_req, &idltest_table_simple, &idltest_simple_col_ra);
+            if (!not_wait_monitored_cell) {
+                ovsdb_idl_wait_monitor_add_column(
+                        &wait_req, &idltest_table_simple, &idltest_simple_col_u);
+            }
+        break;
+        case 2:
+            frequency = WAIT_MONITOR_FREQUENCY_6;
+            ovsdb_idl_wait_monitor_add_column(
+                    &wait_req, &idltest_table_simple, &idltest_simple_col_ia);
+            ovsdb_idl_wait_monitor_add_column(
+                    &wait_req, &idltest_table_simple, &idltest_simple_col_sa);
+            ovsdb_idl_wait_monitor_add_column(
+                    &wait_req, &idltest_table_simple, &idltest_simple_col_ua);
+        break;
+        default:
+            frequency = 0;
+            ovsdb_idl_wait_monitor_add_column(
+                    &wait_req, &idltest_table_simple, &idltest_simple_col_b);
+    }
+
+    if (!ovsdb_idl_wait_monitor_send_txn(&wait_req)) {
+        printf("Aborting: wait monitor send txn failed\n");
+        exit(-1);
+    }
+    while(ovsdb_idl_wait_monitor_status(idl) == status) {
+        ovsdb_idl_wait(idl);
+        poll_block();
+    }
+
+    /* wait for replica synched */
+    ovsdb_idl_run(idl);
+    while (!ovsdb_idl_has_ever_connected(idl)) {
+        ovsdb_idl_wait(idl);
+        poll_block();
+        ovsdb_idl_run(idl);
+    }
+
+    char uuid_buffer[UUID_LEN+1];
+    poll_immediate_wake_at(NULL);
+
+    while (true) {
+
+        ovsdb_idl_wait(idl);
+        poll_block();
+        ovsdb_idl_run(idl);
+        struct ovs_list *requests;
+        requests = ovsdb_idl_wait_update_get_list(idl);
+        struct ovsdb_idl_wait_update *req;
+
+        LIST_FOR_EACH_POP(req, node, requests) {
+
+            struct shash rows;
+            struct shash cols;
+            shash_init(&rows);
+            shash_init(&cols);
+
+            /* check for expected table */
+            if (strcmp(req->table->class->name, "simple")) {
+                printf("Expected simple, received \"%s\"\n", req->table->class->name);
+            }
+
+            /* include all the columns in the list */
+            int i;
+            struct shash_node *node;
+            if (req->columns_n == 0) {
+                SHASH_FOR_EACH(node, &wait_req.added_columns) {
+                    shash_add(&cols, node->name, NULL);
+                }
+            } else {
+                for (i = 0; i < req->columns_n; i++) {
+                    shash_add(&cols, req->columns[i]->name, NULL);
+                }
+            }
+
+            if (req->rows_n == 0) {
+                const struct idltest_simple *s;
+                IDLTEST_SIMPLE_FOR_EACH (s, idl) {
+                    sprintf(uuid_buffer, UUID_FMT, UUID_ARGS(&s->header_.uuid));
+                    shash_add(&rows, uuid_buffer, &s->header_.uuid);
+                }
+            }
+
+            else {
+                for (i = 0; i < req->rows_n; i++) {
+                    sprintf(uuid_buffer, UUID_FMT, UUID_ARGS(&req->rows[i]));
+                    shash_add(&rows, uuid_buffer, &req->rows[i]);
+                }
+            }
+
+            update_data(idl, &rows, &cols, wait_monitorer);
+
+            /* Simulated unblocking frequency: This is the time that should
+             * pass before the session that wait monitors sends the
+             * wait_unblock notification to the server. In case it is
+             * not needed the signal is sent immediately
+             */
+            if (enable_periodicity) {
+                sleep(frequency);
+            }
+            ovsdb_idl_wait_unblock(idl, req);
+
+            /* This too should be done by the IDL */
+            free(req->state);
+            free(req);
+        }
+    }
+
+    /* Free all the resources related to the IDL */
+    ovsdb_idl_destroy(idl);
+}
+
+/* Configure and send wait_until_unblock notification */
+static enum ovsdb_idl_txn_status
+process_wait_until_unblock(struct ovsdb_idl *idl,
+                           int wait_block_timeout,
+                           bool no_rows,
+                           bool no_columns) {
+
+    struct ovsdb_idl_txn *txn;
+    enum ovsdb_idl_txn_status status;
+    do {
+        txn = ovsdb_idl_txn_create(idl);
+        struct ovsdb_idl_txn_wait_unblock * wait;
+        wait = ovsdb_idl_txn_create_wait_until_unblock(
+                &idltest_table_simple, wait_block_timeout*1000);
+        if (!no_columns) {
+            ovsdb_idl_txn_wait_until_unblock_add_column(wait, &idltest_simple_col_b);
+            ovsdb_idl_txn_wait_until_unblock_add_column(wait, &idltest_simple_col_ba);
+            ovsdb_idl_txn_wait_until_unblock_add_column(wait, &idltest_simple_col_i);
+            ovsdb_idl_txn_wait_until_unblock_add_column(wait, &idltest_simple_col_s);
+            ovsdb_idl_txn_wait_until_unblock_add_column(wait, &idltest_simple_col_r);
+            ovsdb_idl_txn_wait_until_unblock_add_column(wait, &idltest_simple_col_u);
+            ovsdb_idl_txn_wait_until_unblock_add_column(wait, &idltest_simple_col_ra);
+            ovsdb_idl_txn_wait_until_unblock_add_column(wait, &idltest_simple_col_ia);
+            ovsdb_idl_txn_wait_until_unblock_add_column(wait, &idltest_simple_col_sa);
+            ovsdb_idl_txn_wait_until_unblock_add_column(wait, &idltest_simple_col_ua);
+        }
+        if (!no_rows) {
+            ovsdb_idl_txn_wait_until_unblock_add_row(wait,
+                    (struct ovsdb_idl_row*) idltest_simple_first(idl));
+        }
+        ovsdb_idl_txn_add_wait_until_unblock(txn, wait);
+        status = ovsdb_idl_txn_commit_block(txn);
+        ovsdb_idl_txn_destroy(txn);
+    } while (status == TXN_INCOMPLETE);
+
+    return status;
+}
+
+/* Tests for wait monitor operations */
+static void
+do_wait_monitor_test(struct ovs_cmdl_context *ctx)
+{
+    /* Test specification:
+     * The test uses three sessions P1, P3 and P6. Each one wait monitors data
+     * and unblocks the wait with simulated frequencies of P1=1s, P3=3s and
+     * P6=6s.
+     * Client waits response from three other clients.
+     */
+
+    /* Configure three clients and run each client in parallel to
+     * wait for notifications */
+    int step = 0;
+    int wait_block_timeout;
+    bool no_rows = false;
+    bool no_columns = false;
+    bool not_monitored_cell = false;
+    bool enable_periodicity = false;      /* Enable periodic updates */
+
+    /* Immediate tests: clients send the wait_unblock signal immediately
+     * after columns are updated.
+     * Wait timeout is set to 5s */
+    enable_periodicity = false;
+    no_rows =
+            ((struct test_ovsdb_pvt_context *)(ctx->pvt))->no_rows;
+    no_columns =
+            ((struct test_ovsdb_pvt_context *)(ctx->pvt))->no_columns;
+    not_monitored_cell =
+            ((struct test_ovsdb_pvt_context *)(ctx->pvt))->not_monitored_cell;
+    wait_block_timeout =
+            ((struct test_ovsdb_pvt_context *)(ctx->pvt))->wait_block_timeout;
+    if (wait_block_timeout) {
+        enable_periodicity = true;
+    }
+
+    int i;
+    int monitorers_num = 3;
+
+    idltest_init();
+    struct ovsdb_idl *idl_client = ovsdb_idl_create(ctx->argv[1],
+        &idltest_idl_class, false, true);
+
+    ovsdb_idl_add_table (idl_client, &idltest_table_simple);
+    ovsdb_idl_add_column(idl_client, &idltest_simple_col_b);
+    ovsdb_idl_add_column(idl_client, &idltest_simple_col_ba);
+    ovsdb_idl_add_column(idl_client, &idltest_simple_col_i);
+    ovsdb_idl_add_column(idl_client, &idltest_simple_col_s);
+    ovsdb_idl_add_column(idl_client, &idltest_simple_col_r);
+    ovsdb_idl_add_column(idl_client, &idltest_simple_col_u);
+    ovsdb_idl_add_column(idl_client, &idltest_simple_col_ra);
+    ovsdb_idl_add_column(idl_client, &idltest_simple_col_ia);
+    ovsdb_idl_add_column(idl_client, &idltest_simple_col_sa);
+    ovsdb_idl_add_column(idl_client, &idltest_simple_col_ua);
+    ovsdb_idl_run(idl_client);
+    ovsdb_idl_get_initial_snapshot(idl_client);
+
+    /* Three child processes wait monitors cells. Parent process is
+     * used for the client
+     */
+    pid_t pid_child[monitorers_num];
+    for (i = 0; i < monitorers_num; i++) {
+
+        pid_child[i] = fork();
+        if (pid_child[i] == -1) {
+            /* error handling here, if needed */
+            exit(1);
+        }
+        if (pid_child[i] == 0) {
+            wait_monitor_session(ctx, i, enable_periodicity, not_monitored_cell);
+            exit(0);
+        }
+    }
+
+    /* This pause is required in the client process to allow monitoring sessions
+     * to be properly set up before sending the blocking wait to the server
+     */
+    sleep(1);
+
+    enum ovsdb_idl_txn_status status;
+    status = process_wait_until_unblock(
+            idl_client,
+            wait_block_timeout,
+            no_rows,
+            no_columns);
+    printf("%03d: Wait monitor result: %d\n",
+            step, status);
+
+    /* Terminate all the sessions processes */
+    for (int i = 0; i < monitorers_num; ++i) {
+        kill(pid_child[i], SIGKILL);
+    }
+
+    ovsdb_idl_destroy(idl_client);
+    return;
+}
+
+
 static struct ovs_cmdl_command all_commands[] = {
     { "log-io", NULL, 2, INT_MAX, do_log_io },
     { "default-atoms", NULL, 0, 0, do_default_atoms },
@@ -2727,6 +3114,7 @@ static struct ovs_cmdl_command all_commands[] = {
     { "idl-fetch-table", NULL, 1, INT_MAX, do_fetch_table },
     { "idl-compound-index", NULL, 2, 2, do_idl_compound_index },
     { "idl-priority-session", NULL, 1, 1, do_idl_priority_session },
+    { "wait-monitor", NULL, 1, INT_MAX, do_wait_monitor_test },
     { "help", NULL, 0, INT_MAX, do_help },
     { NULL, NULL, 0, 0, NULL },
 };

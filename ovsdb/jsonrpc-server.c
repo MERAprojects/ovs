@@ -22,8 +22,11 @@
 #include "bitmap.h"
 #include "column.h"
 #include "dynamic-string.h"
+#include "hash.h"
+#include "hmap.h"
 #include "json.h"
 #include "jsonrpc.h"
+#include "list.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
 #include "ovsdb.h"
@@ -88,6 +91,8 @@ static struct jsonrpc_msg *ovsdb_jsonrpc_monitor_cancel(
     struct ovsdb_jsonrpc_session *,
     struct json_array *params,
     const struct json *request_id);
+static void ovsdb_jsonrpc_wait_monitor_remove_all(struct ovsdb_jsonrpc_session *);
+static void ovsdb_jsonrpc_blocking_wait_remove_all(struct ovsdb_jsonrpc_session *);
 static void ovsdb_jsonrpc_monitor_remove_all(struct ovsdb_jsonrpc_session *);
 static void ovsdb_jsonrpc_monitor_flush_all(struct ovsdb_jsonrpc_session *);
 static bool ovsdb_jsonrpc_monitor_needs_flush(struct ovsdb_jsonrpc_session *);
@@ -414,6 +419,8 @@ struct ovsdb_jsonrpc_session {
 
     /* Monitors. */
     struct hmap monitors;       /* Hmap of "struct ovsdb_jsonrpc_monitor"s. */
+    struct hmap wait_monitoring; /* List of ovsdb_wait_monitoring */
+    struct ovs_list blocking_waits; /* List of ctx_to_session (blocking_wait) */
 
     /* Network connectivity. */
     struct jsonrpc_session *js;  /* JSON-RPC session. */
@@ -432,6 +439,10 @@ static int ovsdb_jsonrpc_session_run(struct ovsdb_jsonrpc_session *);
 static void ovsdb_jsonrpc_session_wait(struct ovsdb_jsonrpc_session *);
 static void ovsdb_jsonrpc_session_get_memory_usage(
     const struct ovsdb_jsonrpc_session *, struct simap *usage);
+static struct jsonrpc_msg *ovsdb_jsonrpc_wait_monitor(
+        struct ovsdb_jsonrpc_session *, struct ovsdb *, struct jsonrpc_msg *);
+static struct jsonrpc_msg *ovsdb_jsonrpc_wait_unblock(
+        struct ovsdb_jsonrpc_session *, struct ovsdb *, struct jsonrpc_msg *);
 static void ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *,
                                              struct jsonrpc_msg *);
 static void ovsdb_jsonrpc_session_got_notify(struct ovsdb_jsonrpc_session *,
@@ -447,6 +458,8 @@ ovsdb_jsonrpc_session_create(struct ovsdb_jsonrpc_remote *remote,
     ovsdb_session_init(&s->up, &remote->server->up);
     s->remote = remote;
     list_push_back(&remote->sessions, &s->node);
+    hmap_init(&s->wait_monitoring);
+    list_init(&s->blocking_waits);
     hmap_init(&s->triggers);
     hmap_init(&s->monitors);
     s->js = js;
@@ -467,9 +480,12 @@ ovsdb_jsonrpc_session_close(struct ovsdb_jsonrpc_session *s)
     ovsdb_jsonrpc_monitor_remove_all(s);
     ovsdb_jsonrpc_session_unlock_all(s);
     ovsdb_jsonrpc_trigger_complete_all(s);
+    ovsdb_jsonrpc_wait_monitor_remove_all(s);
+    ovsdb_jsonrpc_blocking_wait_remove_all(s);
 
     hmap_destroy(&s->monitors);
     hmap_destroy(&s->triggers);
+    hmap_destroy(&s->wait_monitoring);
 
     jsonrpc_session_close(s->js);
     list_remove(&s->node);
@@ -884,6 +900,253 @@ execute_transaction(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
     return NULL;
 }
 
+static struct jsonrpc_msg *
+ovsdb_jsonrpc_wait_monitor(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
+                           struct jsonrpc_msg *request)
+{
+    if (request->params->type != JSON_ARRAY) {
+        VLOG_WARN("Method \"wait-monitor\" with invalid arguments");
+    }
+
+    /* Process a jsonrpc_msg, with the following format:
+     * params: ["database", {
+     *     "table": "name of the table",
+     *     "columns": ["col1", "col2", ..., "col n"]
+     *     }
+     * ]
+     */
+
+    size_t i, j;
+    size_t registered = 0;
+    char *table_name, *column_name;
+    struct json *table_info;
+    struct json *columns_info;
+    struct json *field;
+    for (i = 1; i < request->params->u.array.n; i++) {
+        struct ovsdb_table_schema *table_schema;
+
+        /* For each table in the request */
+        table_info = request->params->u.array.elems[i];
+        if (table_info->type != JSON_OBJECT) {
+            return jsonrpc_create_error(json_string_create("Invalid syntax"),
+                                        request->id);
+        }
+
+        /* Get the name of the table */
+        field = shash_find_data(table_info->u.object, "table");
+        if (!field || field->type != JSON_STRING) {
+            return jsonrpc_create_error(json_string_create("Invalid syntax"),
+                                        request->id);
+        }
+        table_name = field->u.string;
+
+        /* Retrieve the schema */
+        table_schema = shash_find_data(&db->schema->tables, table_name);
+        if (!table_schema) {
+            return jsonrpc_create_error(
+                    json_string_create("Table doesn't exist"),
+                    request->id);
+        }
+
+        /* Read the columns info */
+        columns_info = shash_find_data(table_info->u.object, "columns");
+        if (!columns_info || columns_info->type != JSON_ARRAY) {
+            return jsonrpc_create_error(json_string_create("Invalid syntax"),
+                                                    request->id);
+        }
+
+        for (j = 0; j < columns_info->u.array.n ; j++) {
+            struct ovsdb_column *column_schema;
+
+            /* Read the column */
+            field = columns_info->u.array.elems[j];
+            if (field->type != JSON_STRING) {
+                return jsonrpc_create_error(
+                        json_string_create("Invalid syntax"),
+                        request->id);
+            }
+            column_name = field->u.string;
+
+            /* Get the column schema */
+            column_schema = shash_find_data(&table_schema->columns, column_name);
+            if (!column_schema) {
+                return jsonrpc_create_error(
+                                        json_string_create("Invalid column"),
+                                        request->id);
+            }
+
+            /* Verifies that this session wasn't already wait-monitoring
+             * this column */
+            struct ovsdb_wait_monitoring *wm;
+            HMAP_FOR_EACH_WITH_HASH(wm, session_node,
+                                    hash_pointer(column_schema, 0),
+                                    &s->wait_monitoring) {
+                if (wm->column == column_schema) {
+                    return jsonrpc_create_error(
+                                json_string_create("Column was already monitored"),
+                                request->id);
+                }
+            }
+
+            /* Register the session as a wait monitor of the column */
+            wm = xmalloc(sizeof *wm);
+            wm->column = column_schema;
+            wm->session = s;
+            list_insert(&column_schema->wait_monitoring, &wm->column_node);
+            hmap_insert(&s->wait_monitoring, &wm->session_node,
+                        hash_pointer(column_schema, 0));
+            registered++;
+        }
+    }
+
+    return jsonrpc_create_reply(json_integer_create(registered), request->id);
+}
+
+static struct jsonrpc_msg *
+ovsdb_jsonrpc_wait_monitor_cancel(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
+                           struct jsonrpc_msg *request)
+{
+    if (request->params->type != JSON_ARRAY) {
+        VLOG_WARN("Method \"wait_monitor_cancel\" with invalid arguments");
+    }
+
+    /* Process a jsonrpc_msg, with the following format:
+     * params: ["database", {
+     *     "table": "name of the table",
+     *     "columns": ["col1", "col2", ..., "col n"]
+     *     }
+     * ]
+     */
+
+    size_t i, j;
+    size_t unmonitored = 0;
+    char *table_name, *column_name;
+    struct json *table_info;
+    struct json *columns_info;
+    struct json *field;
+    for (i = 1; i < request->params->u.array.n; i++) {
+        struct ovsdb_table_schema *table_schema;
+
+        /* For each table in the request */
+        table_info = request->params->u.array.elems[i];
+        if (table_info->type != JSON_OBJECT) {
+            return jsonrpc_create_error(json_string_create("Invalid syntax"),
+                                        request->id);
+        }
+
+        /* Get the name of the table */
+        field = shash_find_data(table_info->u.object, "table");
+        if (!field || field->type != JSON_STRING) {
+            return jsonrpc_create_error(json_string_create("Invalid syntax"),
+                                        request->id);
+        }
+        table_name = field->u.string;
+
+        /* Retrieve the schema */
+        table_schema = shash_find_data(&db->schema->tables, table_name);
+        if (!table_schema) {
+            return jsonrpc_create_error(
+                    json_string_create("Table doesn't exist"),
+                    request->id);
+        }
+
+        /* Read the columns info */
+        columns_info = shash_find_data(table_info->u.object, "columns");
+        if (!columns_info || columns_info->type != JSON_ARRAY) {
+            return jsonrpc_create_error(json_string_create("Invalid syntax"),
+                                                    request->id);
+        }
+
+        for (j = 0; j < columns_info->u.array.n ; j++) {
+            struct ovsdb_column *column_schema;
+
+            /* Read the column */
+            field = columns_info->u.array.elems[j];
+            if (field->type != JSON_STRING) {
+                return jsonrpc_create_error(
+                        json_string_create("Invalid syntax"),
+                        request->id);
+            }
+            column_name = field->u.string;
+
+            /* Get the column schema */
+            column_schema = shash_find_data(&table_schema->columns, column_name);
+            if (!column_schema) {
+                return jsonrpc_create_error(
+                                        json_string_create("Invalid column"),
+                                        request->id);
+            }
+
+            /* Verifies that this session wasn't already wait-monitoring
+             * this column */
+            struct ovsdb_wait_monitoring *wm;
+            bool valid_column = false;
+            HMAP_FOR_EACH_WITH_HASH(wm, session_node,
+                                    hash_pointer(column_schema, 0),
+                                    &s->wait_monitoring) {
+                if (wm->column == column_schema) {
+                    valid_column = true;
+                    hmap_remove(&s->wait_monitoring, &wm->session_node);
+                    list_remove(&wm->column_node);
+                    free(wm);
+                }
+            }
+            if (!valid_column) {
+                return jsonrpc_create_error(
+                        json_string_create("Column wasn't already monitored"),
+                        request->id);
+            }
+
+            unmonitored++;
+        }
+    }
+
+    return jsonrpc_create_reply(json_integer_create(unmonitored), request->id);
+}
+
+static struct jsonrpc_msg *
+ovsdb_jsonrpc_wait_unblock(struct ovsdb_jsonrpc_session *s OVS_UNUSED, struct ovsdb *db,
+                           struct jsonrpc_msg *req)
+{
+    if (!db) {
+        return jsonrpc_create_error(
+                        json_string_create("Database doesn't exists"),
+                        req->id);
+    }
+    if (req->params->type != JSON_ARRAY || req->params->u.array.n != 2) {
+        return jsonrpc_create_error(
+                json_string_create("Wrong params for wait_unblock"),
+                req->id);
+    }
+    struct json *id_json = req->params->u.array.elems[1];
+    if (id_json->type != JSON_INTEGER) {
+        return jsonrpc_create_error(
+                    json_string_create("Wrong params for wait_unblock. Expected integer."),
+                    req->id);
+    }
+    long long int id = id_json->u.integer;
+    struct blocked_wait *bw;
+    struct wait_monitored_data *monitored_data;
+    HMAP_FOR_EACH_WITH_HASH(bw, node, hash_int(id, 0), &db->blocked_waits) {
+        if (bw->wait_id == id) {
+            HMAP_FOR_EACH(monitored_data, hmap_node, &bw->wait_monitored_data) {
+                if (monitored_data->session == s && !monitored_data->wait_updated) {
+                    monitored_data->wait_updated = true;
+                    bw->sessions_n--;
+                }
+            }
+            if (!bw->sessions_n) {
+                db->run_triggers = true;
+                poll_immediate_wake_at(NULL);
+            }
+            return NULL;
+        }
+    }
+    return jsonrpc_create_error(
+            json_string_create("The unlocked id doesn't exist"),
+            req->id);
+}
+
 static void
 ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *s,
                                   struct jsonrpc_msg *request)
@@ -929,6 +1192,17 @@ ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *s,
         reply = ovsdb_jsonrpc_session_lock(s, request, OVSDB_LOCK_STEAL);
     } else if (!strcmp(request->method, "unlock")) {
         reply = ovsdb_jsonrpc_session_unlock(s, request);
+    } else if (!strcmp(request->method, "wait_monitor")) {
+        struct ovsdb *db = ovsdb_jsonrpc_lookup_db(s, request, &reply);
+        reply = ovsdb_jsonrpc_wait_monitor(s, db, request);
+    } else if (!strcmp(request->method, "wait_monitor_cancel")) {
+        struct ovsdb *db = ovsdb_jsonrpc_lookup_db(s, request, &reply);
+        reply = ovsdb_jsonrpc_wait_monitor_cancel(s, db, request);
+    } else if (!strcmp(request->method, "wait_unblock")) {
+        struct ovsdb *db = ovsdb_jsonrpc_lookup_db(s, request, &reply);
+        if (db) {
+            reply = ovsdb_jsonrpc_wait_unblock(s, db, request);
+        }
     } else if (!strcmp(request->method, "echo")) {
         reply = jsonrpc_create_reply(json_clone(request->params), request->id);
     } else if (!strcmp(request->method, "identify")) {
@@ -1373,6 +1647,28 @@ ovsdb_jsonrpc_monitor_cancel(struct ovsdb_jsonrpc_session *s,
 }
 
 static void
+ovsdb_jsonrpc_blocking_wait_remove_all(struct ovsdb_jsonrpc_session *s)
+{
+    struct ctx_to_session *ctxs;
+    LIST_FOR_EACH_POP (ctxs, node_session, &s->blocking_waits) {
+        list_remove(&ctxs->node_ctx);
+        ctxs->ctx->blocking_wait_aborted = true;
+        free(ctxs);
+    }
+}
+
+static void
+ovsdb_jsonrpc_wait_monitor_remove_all(struct ovsdb_jsonrpc_session *s)
+{
+    struct ovsdb_wait_monitoring *wm, *next;
+    HMAP_FOR_EACH_SAFE (wm, next, session_node, &s->wait_monitoring) {
+        list_remove(&wm->column_node);
+        hmap_remove(&s->wait_monitoring, &wm->session_node);
+        free(wm);
+    }
+}
+
+static void
 ovsdb_jsonrpc_monitor_remove_all(struct ovsdb_jsonrpc_session *s)
 {
     struct ovsdb_jsonrpc_monitor *m, *next;
@@ -1532,4 +1828,24 @@ void
 ovsdb_jsonrpc_set_priority_file(struct ovsdb_jsonrpc_server *jsonrpc, char *pf)
 {
     jsonrpc->priority_file = pf;
+}
+
+void
+ovsdb_jsonrpc_server_session_send(struct ovsdb_jsonrpc_session * s,
+                                  struct jsonrpc_msg *msg)
+{
+    jsonrpc_session_send(s->js, msg);
+}
+
+void
+ovsdb_jsonrpc_blocking_wait_add_to_txn(struct ovsdb_jsonrpc_session *session,
+                                       struct ovsdb_txn_ctx *ctx)
+{
+    struct ctx_to_session *ctx_to_session;
+    ctx_to_session = xmalloc(sizeof *ctx_to_session);
+
+    ctx_to_session->ctx = ctx;
+    ctx_to_session->session = session;
+    list_insert(&ctx->blocking_sessions, &ctx_to_session->node_ctx);
+    list_insert(&session->blocking_waits, &ctx_to_session->node_session);
 }

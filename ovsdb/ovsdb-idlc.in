@@ -1146,6 +1146,8 @@ static void\n%s_columns_init(void)
             print "    c->name = \"%(c)s\";" % d
             print column.type.cInitType("    ", "c->type")
             print "    c->mutable = %s;" % mutable
+            print "    list_init(&c->wait_monitor_change);"
+            print "    c->wait_monitored = false;"
             print "    c->parse = %(s)s_parse_%(c)s;" % d
             print "    c->unparse = %(s)s_unparse_%(c)s;" % d
             if isColumnIndexable(column):

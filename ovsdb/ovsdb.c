@@ -18,13 +18,18 @@
 #include "ovsdb.h"
 
 #include "column.h"
+#include "hash.h"
 #include "json.h"
+#include "list.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
 #include "ovsdb-types.h"
 #include "simap.h"
 #include "table.h"
 #include "transaction.h"
+
+static void
+ovsdb_release_context(struct ovsdb_txn_ctx *ctx);
 
 struct ovsdb_schema *
 ovsdb_schema_create(const char *name, const char *version, const char *cksum)
@@ -330,13 +335,17 @@ ovsdb_create(struct ovsdb_schema *schema)
     db->schema = schema;
     list_init(&db->replicas);
     list_init(&db->triggers);
+    hmap_init(&db->blocked_waits);
     db->run_triggers = false;
+    db->blocked_wait_id = 0;
 
     shash_init(&db->tables);
     SHASH_FOR_EACH (node, &schema->tables) {
         struct ovsdb_table_schema *ts = node->data;
         shash_add(&db->tables, node->name, ovsdb_table_create(ts));
     }
+
+    hmap_init(&db->contexts);
 
     /* Set all the refTables. */
     SHASH_FOR_EACH (node, &schema->tables) {
@@ -375,12 +384,20 @@ ovsdb_destroy(struct ovsdb *db)
         }
         shash_destroy(&db->tables);
 
+        struct ovsdb_txn_ctx *ctx, *next;
+        HMAP_FOR_EACH_SAFE (ctx, next, node, &db->contexts) {
+            ovsdb_release_context(ctx);
+        }
+        hmap_destroy(&db->contexts);
+
         /* The schemas, but not the table that points to them, were deleted in
          * the previous step, so we need to clear out the table.  We can't
          * destroy the table, because ovsdb_schema_destroy() will do that. */
         shash_clear(&db->schema->tables);
 
         ovsdb_schema_destroy(db->schema);
+        hmap_destroy(&db->blocked_waits);
+
         free(db);
     }
 }
@@ -409,6 +426,68 @@ ovsdb_get_table(const struct ovsdb *db, const char *name)
 {
     return shash_find_data(&db->tables, name);
 }
+
+struct ovsdb_txn_ctx *
+ovsdb_get_context(const struct ovsdb *db, const struct json *params)
+{
+    struct ovsdb_txn_ctx *ctx;
+    HMAP_FOR_EACH_WITH_HASH(ctx, node, hash_pointer(params, 0), &db->contexts) {
+        if (ctx->params == params) {
+            return ctx;
+        }
+    }
+    return NULL;
+}
+
+struct ovsdb_txn_ctx *
+ovsdb_create_context(const struct ovsdb *db_, const struct json *params)
+{
+    struct ovsdb *db = CONST_CAST(struct ovsdb *, db_);
+    struct ovsdb_txn_ctx *ctx = xmalloc(sizeof *ctx);
+    hmap_insert(&db->contexts, &ctx->node, hash_pointer(params, 0));
+
+    /* Default values */
+    ctx->db = db;
+    ctx->params = params;
+
+    /* General values for transactions */
+    ctx->current_operation = 0;
+    ctx->max_successful_operation = 0;
+
+    /* Default values for wait until unblock */
+    list_init(&ctx->blocking_sessions);
+    ctx->blocking_wait_id = 0;
+    ctx->blocking_wait_id_is_set = false;
+    ctx->blocking_wait_aborted = false;
+
+    return ctx;
+}
+
+static void
+ovsdb_release_context(struct ovsdb_txn_ctx *ctx)
+{
+    struct ovsdb *db = CONST_CAST(struct ovsdb *, ctx->db);
+    hmap_remove(&db->contexts, &ctx->node);
+    struct ctx_to_session *ctx_session;
+    LIST_FOR_EACH_POP(ctx_session, node_ctx, &ctx->blocking_sessions) {
+        list_remove(&ctx_session->node_session);
+        free(ctx_session);
+    }
+    /* Free memory allocated within the context */
+    free(ctx);
+}
+
+void
+ovsdb_destroy_context(const struct ovsdb *db, const struct json *params)
+{
+    struct ovsdb_txn_ctx *ctx = ovsdb_get_context(db, params);
+    if (!ctx) {
+        return;
+    }
+    ovsdb_release_context(ctx);
+    return;
+}
+
 
 void
 ovsdb_replica_init(struct ovsdb_replica *r,

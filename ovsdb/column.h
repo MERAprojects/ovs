@@ -18,6 +18,8 @@
 
 #include <stdbool.h>
 #include "compiler.h"
+#include "hmap.h"
+#include "include/openvswitch/list.h"
 #include "ovsdb-types.h"
 
 struct ovsdb_table;
@@ -31,6 +33,15 @@ struct ovsdb_column {
     bool mutable;
     bool persistent;
     struct ovsdb_type type;
+
+    struct ovs_list wait_monitoring; /* List of ovsdb_wait_monitoring */
+};
+
+struct ovsdb_wait_monitoring {
+    struct ovs_list column_node;
+    struct hmap_node session_node;
+    struct ovsdb_column *column;
+    struct ovsdb_jsonrpc_session *session;
 };
 
 /* A few columns appear in every table with standardized column indexes.
