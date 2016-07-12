@@ -125,7 +125,7 @@ fd_send(struct stream *stream, const void *buffer, size_t n)
     ssize_t retval;
     int error;
 
-    retval = send(s->fd, buffer, n, 0);
+    retval = send(s->fd, buffer, n, MSG_NOSIGNAL);
     if (retval < 0) {
         error = sock_errno();
 #ifdef _WIN32

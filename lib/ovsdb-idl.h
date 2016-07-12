@@ -38,6 +38,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "compiler.h"
+#include "list.h"
+#include "shash.h"
 #include "ovsdb-types.h"
 #include "skiplist.h"
 
@@ -147,6 +149,106 @@ void ovsdb_idl_add_table(struct ovsdb_idl *,
 
 void ovsdb_idl_omit(struct ovsdb_idl *, const struct ovsdb_idl_column *);
 void ovsdb_idl_omit_alert(struct ovsdb_idl *, const struct ovsdb_idl_column *);
+
+
+/* Wait Monitor
+ *
+ * The OVSDB clients can monitor and receive notifications when another client
+ * is waiting over a set of columns.
+ */
+
+struct ovsdb_idl_wait_update {
+    struct ovs_list node;                /* Node in IDL->wait_updates */
+    int    update_id;
+    char   *state;
+    struct ovsdb_idl_table *table;
+    struct uuid *rows;                   /* uuids of the requested rows */
+    size_t rows_n;                       /* Count of rows in wait_rows */
+    struct ovsdb_idl_column **columns;   /* requested ovsdb_idl_column-s */
+    size_t columns_n;                    /* Count of cols in wait_cols s*/
+};
+
+struct ovsdb_idl_published_cell {
+    struct ovs_list node;       /* Node in ovsdb_idl_wait_update->wait_cells */
+    char *table;
+    char *uuid;
+    char *column;
+};
+
+/*
+ * Structure used to save wait_monitor notification data
+ */
+struct ovsdb_idl_wait_monitor_request {
+    struct ovsdb_idl *idl;
+    struct shash added_columns;
+    struct shash removed_columns;
+};
+
+enum ovsdb_idl_wait_monitor_status {
+    WAIT_MONITOR_SUCCESS,
+    WAIT_MONITOR_FAIL,
+    WAIT_MONITOR_PENDING,
+    WAIT_MONITOR_NO_CHANGE
+};
+
+struct ovsdb_idl_txn;
+
+struct ovsdb_idl_txn_wait_unblock {
+    struct ovs_list node;
+    const struct ovsdb_idl_table_class *table;
+    struct shash columns;
+    struct shash rows;
+    unsigned int timeout;
+};
+
+void ovsdb_idl_wait_monitor_create_txn(struct ovsdb_idl *,
+                                       struct ovsdb_idl_wait_monitor_request *);
+bool ovsdb_idl_wait_monitor_add_column(struct ovsdb_idl_wait_monitor_request *,
+                                       struct ovsdb_idl_table_class *,
+                                       struct ovsdb_idl_column *);
+bool ovsdb_idl_wait_monitor_remove_column(
+        struct ovsdb_idl_wait_monitor_request *,
+        struct ovsdb_idl_table_class *,
+        struct ovsdb_idl_column *);
+
+bool ovsdb_idl_wait_monitor_send_txn(struct ovsdb_idl_wait_monitor_request *);
+enum ovsdb_idl_wait_monitor_status ovsdb_idl_wait_monitor_status(
+        struct ovsdb_idl *);
+
+enum ovsdb_idl_wait_monitor_status ovsdb_idl_wait_monitor_cancel_status(
+        struct ovsdb_idl *);
+
+struct ovsdb_idl_txn_wait_unblock *
+ovsdb_idl_txn_create_wait_until_unblock(const struct ovsdb_idl_table_class *,
+                                        unsigned int timeout);
+
+void ovsdb_idl_txn_add_wait_until_unblock(struct ovsdb_idl_txn *txn, struct ovsdb_idl_txn_wait_unblock *wait);
+
+bool ovsdb_idl_txn_wait_until_unblock_add_column(
+        struct ovsdb_idl_txn_wait_unblock *, const struct ovsdb_idl_column *);
+
+bool ovsdb_idl_txn_wait_until_unblock_add_row(
+        struct ovsdb_idl_txn_wait_unblock *, const struct ovsdb_idl_row *);
+
+void ovsdb_idl_wait_unblock(struct ovsdb_idl *, struct ovsdb_idl_wait_update *);
+
+struct ovs_list * ovsdb_idl_wait_update_get_list(struct ovsdb_idl *);
+
+/* Iterates over all the ovsdb_idl_wait_update requests.
+ * The client MUST release the request using
+ * ovsdb_idl_wait_update_destroy */
+#define WAIT_UPDATE_FOR_EACH_SAFE(REQ, NEXT, IDL) \
+    LIST_FOR_EACH_SAFE(REQ, NEXT, node, ovsdb_idl_wait_update_get_list(IDL))
+
+/* Iterates over all the current ovsdb_idl_wait_update
+ * requests AND REMOVES the request from the requests list.
+ * The developer still MUST release the request using
+ * ovsdb_idl_wait_update_destroy */
+#define WAIT_UPDATE_FOR_EACH_POP(REQ, IDL) \
+    LIST_FOR_EACH_POP(REQ, node, ovsdb_idl_wait_update_get_list(IDL))
+
+void ovsdb_idl_wait_update_destroy(struct ovsdb_idl_wait_update *);
+
 
 /* Change tracking. */
 enum ovsdb_idl_change {

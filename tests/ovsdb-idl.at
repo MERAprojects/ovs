@@ -810,6 +810,282 @@ OVSDB_CHECK_IDL_PARTIAL_UPDATE_MAP_COLUMN([map, simple2 idl-partial-update-map-c
 010: End test
 ]])
 
+m4_define([OVSDB_CHECK_WAIT_MONITOR],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl wait-monitor $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -w0 -c wait-monitor unix:socket $3],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_WAIT_MONITOR([map, simple wait-monitor, initially populated, wait-blocking-timeout 0s],
+[['["idltest",
+    {"op": "insert",
+    "table": "simple",
+    "row": {"i": 1,
+            "r": 2.0,
+            "b": true,
+            "s": "mystring",
+            "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+            "ia": ["set", [1, 2, 3]],
+            "ra": ["set", [-0.5]],
+            "ba": ["set", [true]],
+            "sa": ["set", ["abc", "def"]],
+            "ua": ["set", []]}},
+    {"op": "insert",
+    "table": "simple",
+    "row": {"i": 1,
+            "r": 2.0,
+            "b": true,
+            "s": "mystring",
+            "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc2"],
+            "ia": ["set", [1, 2, 3]],
+            "ra": ["set", [-0.5]],
+            "ba": ["set", [true]],
+            "sa": ["set", ["abc", "def"]],
+            "ua": ["set", []]}}]']
+],
+[],
+[[000: Wait monitor result: 4
+]])
+
+m4_define([OVSDB_CHECK_WAIT_MONITOR],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl wait-monitor positive $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -w10 -c wait-monitor unix:socket $3],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_WAIT_MONITOR([map, simple wait-monitor, initially populated, wait-blocking-timeout 10s],
+[['["idltest",
+    {"op": "insert",
+    "table": "simple",
+    "row": {"i": 1,
+            "r": 2.0,
+            "b": true,
+            "s": "mystring",
+            "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+            "ia": ["set", [1, 2, 3]],
+            "ra": ["set", [-0.5]],
+            "ba": ["set", [true]],
+            "sa": ["set", ["abc", "def"]],
+            "ua": ["set", []]}},
+    {"op": "insert",
+    "table": "simple",
+    "row": {"i": 1,
+            "r": 2.0,
+            "b": true,
+            "s": "mystring",
+            "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc2"],
+            "ia": ["set", [1, 2, 3]],
+            "ra": ["set", [-0.5]],
+            "ba": ["set", [true]],
+            "sa": ["set", ["abc", "def"]],
+            "ua": ["set", []]}}]']
+],
+[],
+[[000: Wait monitor result: 4
+]])
+
+m4_define([OVSDB_CHECK_WAIT_MONITOR],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl wait-monitor positive $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -w4 -c wait-monitor unix:socket $3],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_WAIT_MONITOR([map, simple wait-monitor, initially populated, wait-blocking-timeout 4s],
+[['["idltest",
+    {"op": "insert",
+    "table": "simple",
+    "row": {"i": 1,
+            "r": 2.0,
+            "b": true,
+            "s": "mystring",
+            "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+            "ia": ["set", [1, 2, 3]],
+            "ra": ["set", [-0.5]],
+            "ba": ["set", [true]],
+            "sa": ["set", ["abc", "def"]],
+            "ua": ["set", []]}},
+    {"op": "insert",
+    "table": "simple",
+    "row": {"i": 1,
+            "r": 2.0,
+            "b": true,
+            "s": "mystring",
+            "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc2"],
+            "ia": ["set", [1, 2, 3]],
+            "ra": ["set", [-0.5]],
+            "ba": ["set", [true]],
+            "sa": ["set", ["abc", "def"]],
+            "ua": ["set", []]}}]']
+],
+[],
+[[000: Wait monitor result: 5
+]])
+
+m4_define([OVSDB_CHECK_WAIT_MONITOR],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl wait-monitor positive $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -w10 -c -p wait-monitor unix:socket $3],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_WAIT_MONITOR([map, simple wait-monitor, initially populated, not monitored cell],
+[['["idltest",
+    {"op": "insert",
+    "table": "simple",
+    "row": {"i": 1,
+            "r": 2.0,
+            "b": true,
+            "s": "mystring",
+            "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+            "ia": ["set", [1, 2, 3]],
+            "ra": ["set", [-0.5]],
+            "ba": ["set", [true]],
+            "sa": ["set", ["abc", "def"]],
+            "ua": ["set", []]}},
+    {"op": "insert",
+    "table": "simple",
+    "row": {"i": 1,
+            "r": 2.0,
+            "b": true,
+            "s": "mystring",
+            "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc2"],
+            "ia": ["set", [1, 2, 3]],
+            "ra": ["set", [-0.5]],
+            "ba": ["set", [true]],
+            "sa": ["set", ["abc", "def"]],
+            "ua": ["set", []]}}]']
+],
+[],
+[[000: Wait monitor result: 7
+]])
+
+m4_define([OVSDB_CHECK_WAIT_MONITOR],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl wait-monitor positive $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -w10 -c -r wait-monitor unix:socket $3],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_WAIT_MONITOR([map, simple wait-monitor, initially populated, no rows specified],
+[['["idltest",
+    {"op": "insert",
+    "table": "simple",
+    "row": {"i": 1,
+            "r": 2.0,
+            "b": true,
+            "s": "mystring",
+            "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+            "ia": ["set", [1, 2, 3]],
+            "ra": ["set", [-0.5]],
+            "ba": ["set", [true]],
+            "sa": ["set", ["abc", "def"]],
+            "ua": ["set", []]}},
+    {"op": "insert",
+    "table": "simple",
+    "row": {"i": 1,
+            "r": 2.0,
+            "b": true,
+            "s": "mystring",
+            "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc2"],
+            "ia": ["set", [1, 2, 3]],
+            "ra": ["set", [-0.5]],
+            "ba": ["set", [true]],
+            "sa": ["set", ["abc", "def"]],
+            "ua": ["set", []]}}]']
+],
+[],
+[[000: Wait monitor result: 4
+]])
+
+m4_define([OVSDB_CHECK_WAIT_MONITOR],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl wait-monitor positive $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -w10 -c -m wait-monitor unix:socket $3],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_WAIT_MONITOR([map, simple wait-monitor, initially populated, no columns specified],
+[['["idltest",
+    {"op": "insert",
+    "table": "simple",
+    "row": {"i": 1,
+            "r": 2.0,
+            "b": true,
+            "s": "mystring",
+            "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+            "ia": ["set", [1, 2, 3]],
+            "ra": ["set", [-0.5]],
+            "ba": ["set", [true]],
+            "sa": ["set", ["abc", "def"]],
+            "ua": ["set", []]}},
+    {"op": "insert",
+    "table": "simple",
+    "row": {"i": 1,
+            "r": 2.0,
+            "b": true,
+            "s": "mystring",
+            "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc2"],
+            "ia": ["set", [1, 2, 3]],
+            "ra": ["set", [-0.5]],
+            "ba": ["set", [true]],
+            "sa": ["set", ["abc", "def"]],
+            "ua": ["set", []]}}]']
+],
+[],
+[[000: Wait monitor result: 4
+]])
+
 if HALON
 m4_define([OVSDB_CHECK_IDL_INFO_C],
   [AT_SETUP([$1 - C])
