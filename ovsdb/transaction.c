@@ -470,13 +470,13 @@ ovsdb_txn_update_weak_refs(struct ovsdb_txn *txn OVS_UNUSED,
      */
     if (txn_row->old && txn_row->new) {
         /* Move the incoming weak references from old to new */
-        list_transplant(&txn_row->new->dst_refs, &txn_row->old->dst_refs);
+        list_push_back_all(&txn_row->new->dst_refs, &txn_row->old->dst_refs);
     }
 
     /* Insert the weak references originating in the new version of the row */
     struct ovsdb_row *dst_row;
     if (txn_row->new) {
-        LIST_FOR_EACH_SAFE (weak, next, src_node, &txn_row->new->src_refs) {
+        LIST_FOR_EACH (weak, src_node, &txn_row->new->src_refs) {
             /* dst_row MUST exist */
             dst_row = CONST_CAST(struct ovsdb_row *,
                     ovsdb_table_get_row(weak->dst_table, &weak->dst));
@@ -488,8 +488,7 @@ ovsdb_txn_update_weak_refs(struct ovsdb_txn *txn OVS_UNUSED,
 }
 
 static void
-add_weak_ref(struct ovsdb_txn *txn OVS_UNUSED,
-             const struct ovsdb_row *src_, const struct ovsdb_row *dst_)
+add_weak_ref(const struct ovsdb_row *src_, const struct ovsdb_row *dst_)
 {
     struct ovsdb_row *src = CONST_CAST(struct ovsdb_row *, src_);
     struct ovsdb_row *dst = CONST_CAST(struct ovsdb_row *, dst_);
@@ -511,7 +510,7 @@ add_weak_ref(struct ovsdb_txn *txn OVS_UNUSED,
     weak = xmalloc(sizeof *weak);
     weak->src = src;
     weak->dst_table = dst->table;
-    memcpy(&weak->dst, ovsdb_row_get_uuid(dst), sizeof(struct uuid));
+    weak->dst = *ovsdb_row_get_uuid(dst);
     /* The dst_refs list is updated at commit time */
     list_init(&weak->dst_node);
     list_push_back(&src->src_refs, &weak->src_node);
@@ -558,7 +557,7 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
                 row = ovsdb_table_get_row(column->type.key.u.uuid.refTable,
                                           &datum->keys[i].uuid);
                 if (row) {
-                    add_weak_ref(txn, txn_row->new, row);
+                    add_weak_ref(txn_row->new, row);
                     i++;
                 } else {
                     if (uuid_is_zero(&datum->keys[i].uuid)) {
@@ -579,7 +578,7 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
                 row = ovsdb_table_get_row(column->type.value.u.uuid.refTable,
                                           &datum->values[i].uuid);
                 if (row) {
-                    add_weak_ref(txn, txn_row->new, row);
+                    add_weak_ref(txn_row->new, row);
                     i++;
                 } else {
                     if (uuid_is_zero(&datum->values[i].uuid)) {

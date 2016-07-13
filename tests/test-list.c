@@ -186,7 +186,7 @@ test_list_for_each_pop(void)
 
 /* Tests the transplant of one list into another  */
 static void
-test_list_transplant(void)
+test_list_push_back_all(void)
 {
     struct ovs_list list_a, list_b;
     struct element a, b, c, d;
@@ -209,7 +209,7 @@ test_list_transplant(void)
     assert(2 == list_size(&list_b));
 
     /* Perform transplant */
-    list_transplant(&list_a, &list_b);
+    list_push_back_all(&list_a, &list_b);
 
     /* Check expected result */
     assert(4 == list_size(&list_a));
@@ -237,7 +237,7 @@ test_list_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     run_test(test_list_construction);
     run_test(test_list_for_each_safe);
     run_test(test_list_for_each_pop);
-    run_test(test_list_transplant);
+    run_test(test_list_push_back_all);
     printf("\n");
 }
 

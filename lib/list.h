@@ -279,21 +279,9 @@ list_is_short(const struct ovs_list *list)
 
 /* Transplant a list into another, and resets the origin list */
 static inline void
-list_transplant(const struct ovs_list *dst_, const struct ovs_list *src_)
+list_push_back_all(struct ovs_list *dst, struct ovs_list *src)
 {
-    struct ovs_list *src, *dst;
-    src = CONST_CAST(struct ovs_list *, src_);
-    dst = CONST_CAST(struct ovs_list *, dst_);
-
-    /* Chain last element of dst with first of src */
-    src->next->prev = dst->prev;
-    dst->prev->next = src->next;
-
-    /* Chain last element of src with head of dst */
-    src->prev->next = dst;
-    dst->prev = src->prev;
-
-    list_init(src);
+    ovs_list_splice(dst, src->next, src);
 }
 
 #endif /* list.h */
