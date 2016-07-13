@@ -281,7 +281,7 @@ list_is_short(const struct ovs_list *list)
 static inline void
 list_push_back_all(struct ovs_list *dst, struct ovs_list *src)
 {
-    ovs_list_splice(dst, src->next, src);
+    list_splice(dst, src->next, src);
 }
 
 #endif /* list.h */
