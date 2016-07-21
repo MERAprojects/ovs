@@ -32,6 +32,9 @@ AM_CPPFLAGS += -I $(top_builddir)/libltdl
 AM_CPPFLAGS += $(SSL_INCLUDES)
 
 AM_CFLAGS = -Wstrict-prototypes -DOPS -DOPS_TEMP
+if OVS_TEST
+AM_CFLAGS += -DOVS_TEST
+endif
 AM_CFLAGS += $(WARNING_FLAGS)
 AM_CFLAGS += $(OVS_CFLAGS)
 
@@ -377,14 +380,17 @@ nodist_ovslibinclude_HEADERS = config.h
 #nodist_ovslibinclude_HEADERS += include/odp-netlink.h
 endif
 
-include m4/automake.mk
-include lib/automake.mk
-include ofproto/automake.mk
-include utilities/automake.mk
-include include/automake.mk
+include $(srcdir)/m4/automake.mk
+include $(srcdir)/lib/automake.mk
+include $(srcdir)/ofproto/automake.mk
+include $(srcdir)/utilities/automake.mk
+include $(srcdir)/include/automake.mk
 if OVS_VSWITCHD
-include vswitchd/automake.mk
+include $(srcdir)/vswitchd/automake.mk
 endif
-include ovsdb/automake.mk
-include python/automake.mk
-include vtep/automake.mk
+include $(srcdir)/ovsdb/automake.mk
+include $(srcdir)/python/automake.mk
+include $(srcdir)/vtep/automake.mk
+if OVS_TEST
+include $(srcdir)/tests/automake.mk
+endif

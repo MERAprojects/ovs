@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
+#@INCLUDE_NEXT@ @NEXT_STRING_H@
+
 #ifndef STRING_WRAPPER_H
 #define STRING_WRAPPER_H 1
-
-#@INCLUDE_NEXT@ @NEXT_STRING_H@
 
 /* Glibc 2.7 has a bug in strtok_r when compiling with optimization that can
  * cause segfaults if the delimiters argument is a compile-time constant that

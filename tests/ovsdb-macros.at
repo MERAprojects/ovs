@@ -5,10 +5,17 @@ m4_define([OVSDB_INIT],
   [AT_CHECK(
      [ovsdb-tool create $1 $abs_top_srcdir/vswitchd/vswitch.ovsschema],
      [0], [stdout], [ignore])
+   m4_if([OPS], AT_CHECK(
+     [[ovsdb-tool transact $1 \
+        '["OpenSwitch",
+          {"op": "insert",
+           "table": "System",
+           "row": {}}]']],
+     [0], [ignore], [ignore]),
    AT_CHECK(
      [[ovsdb-tool transact $1 \
         '["Open_vSwitch",
           {"op": "insert",
            "table": "Open_vSwitch",
            "row": {}}]']],
-     [0], [ignore], [ignore])])
+     [0], [ignore], [ignore]))])

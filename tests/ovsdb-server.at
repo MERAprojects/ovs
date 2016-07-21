@@ -673,6 +673,7 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-server combines updates on backlogged connections])
 on_exit 'kill `cat *.pid`'
+AT_SKIP_IF(test OPS)
 
 # The maximum socket receive buffer size is important for this test, which
 # tests behavior when the receive buffer overflows.

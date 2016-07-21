@@ -164,30 +164,35 @@ AT_CLEANUP
 #: disruption=0.00 (perfect=0.00)
 
 AT_SETUP([bundle action missing argument])
+AT_SKIP_IF(test OPS)
 AT_CHECK([ovs-ofctl parse-flow actions=bundle], [1], [],
   [ovs-ofctl: : not enough arguments to bundle action
 ])
 AT_CLEANUP
 
 AT_SETUP([bundle action bad fields])
+AT_SKIP_IF(test OPS)
 AT_CHECK([ovs-ofctl parse-flow 'actions=bundle(xyzzy,60,hrw,ofport,slaves:1,2))'], [1], [],
   [ovs-ofctl: xyzzy,60,hrw,ofport,slaves:1,2: unknown fields `xyzzy'
 ])
 AT_CLEANUP
 
 AT_SETUP([bundle action bad algorithm])
+AT_SKIP_IF(test OPS)
 AT_CHECK([ovs-ofctl parse-flow 'actions=bundle(symmetric_l4,60,fubar,ofport,slaves:1,2))'], [1], [],
   [ovs-ofctl: symmetric_l4,60,fubar,ofport,slaves:1,2: unknown algorithm `fubar'
 ])
 AT_CLEANUP
 
 AT_SETUP([bundle action bad slave type])
+AT_SKIP_IF(test OPS)
 AT_CHECK([ovs-ofctl parse-flow 'actions=bundle(symmetric_l4,60,hrw,robot,slaves:1,2))'], [1], [],
   [ovs-ofctl: symmetric_l4,60,hrw,robot,slaves:1,2: unknown slave_type `robot'
 ])
 AT_CLEANUP
 
 AT_SETUP([bundle action bad slave delimiter])
+AT_SKIP_IF(test OPS)
 AT_CHECK([ovs-ofctl parse-flow 'actions=bundle(symmetric_l4,60,hrw,ofport,robot:1,2))'], [1], [],
   [ovs-ofctl: symmetric_l4,60,hrw,ofport,robot:1,2: missing slave delimiter, expected `slaves' got `robot'
 ])

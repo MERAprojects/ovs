@@ -102,7 +102,7 @@ AssertionError
 AT_CLEANUP
 
 AT_SETUP([vlog - vlog/reopen - Python])
-AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([test $HAVE_PYTHON = no] || [test OPS])
 on_exit 'kill `cat test-unixctl.py.pid`'
 
 AT_CAPTURE_FILE([log])
@@ -127,7 +127,7 @@ AT_CHECK([sed 's/.*|//' log], [0], [dnl
 AT_CLEANUP
 
 AT_SETUP([vlog - vlog/reopen without log file - Python])
-AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([test $HAVE_PYTHON = no] || [test OPS])
 on_exit 'kill `cat test-unixctl.py.pid`'
 
 AT_CHECK([$PYTHON $srcdir/test-unixctl.py --pidfile --detach])
@@ -141,7 +141,7 @@ dnl This checks that if vlog/reopen can't reopen the log file,
 dnl nothing particularly bad (e.g. Python throws an exception and
 dnl aborts the program) happens.
 AT_SETUP([vlog - vlog/reopen can't reopen log file - Python])
-AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([test $HAVE_PYTHON = no] || [test OPS])
 
 # Verify that /dev/full is a character device that fails writes.
 AT_SKIP_IF([test ! -c /dev/full])
@@ -169,7 +169,7 @@ AT_CHECK([sed 's/.*|//' log], [0], [dnl
 AT_CLEANUP
 
 AT_SETUP([vlog - vlog/set and vlog/list - Python])
-AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([test $HAVE_PYTHON = no] || [test OPS])
 on_exit 'kill `cat test-unixctl.py.pid`'
 
 AT_CAPTURE_FILE([log])

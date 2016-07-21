@@ -195,7 +195,11 @@ test_netflow_main(int argc, char *argv[])
     }
 
     daemon_save_fd(STDOUT_FILENO);
+#ifdef OPS
+    daemonize_start();
+#else
     daemonize_start(false);
+#endif
 
     error = unixctl_server_create(NULL, &server);
     if (error) {

@@ -580,7 +580,7 @@ AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl], [0],
 ]], [], [kill `cat pid`])
 
 # Check that ovsdb-idl figured out that table link2 and column l2 are missing.
-AT_CHECK([grep ovsdb_idl stderr | sort], [0], [dnl
+AT_CHECK([grep -v "DEBUG"  stderr | grep ovsdb_idl | sort], [0], [dnl
 test-ovsdb|ovsdb_idl|idltest database lacks link2 table (database needs upgrade?)
 test-ovsdb|ovsdb_idl|link1 table in idltest database lacks l2 column (database needs upgrade?)
 ])
@@ -776,6 +776,7 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
 014: updated columns: ba i ia r ra s
 015: done
 ]])
+
 
 m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_MAP_COLUMN],
   [AT_SETUP([$1 - C])
@@ -1089,6 +1090,7 @@ OVSDB_CHECK_WAIT_MONITOR([map, simple wait-monitor, initially populated, no colu
 if HALON
 m4_define([OVSDB_CHECK_IDL_INFO_C],
   [AT_SETUP([$1 - C])
+   AT_SKIP_IF( test OPS )
    AT_KEYWORDS([ovsdb server idl seqno positive $5])
    OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
@@ -1123,6 +1125,7 @@ OVSDB_CHECK_IDL_INFO_C([simple idl, insert and modify seqno increment],
 m4_define([OVSDB_CHECK_IDL_DELETE_SEQNO_C],
   [AT_SETUP([$1 - C])
    AT_KEYWORDS([ovsdb server idl delete seqno positive $5])
+   AT_SKIP_IF( test OPS )
    OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])

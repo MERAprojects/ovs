@@ -354,7 +354,14 @@ make_unix_socket(int style, bool nonblock,
         error = make_sockaddr_un(bind_path, &un, &un_len, &dirfd, linkname);
         if (!error) {
             error = bind_unix_socket(fd, (struct sockaddr *) &un, un_len);
-#ifdef OPS
+
+/* TBD:
+ * There is a need to define a way to avoid this part of code when running tests
+ * in native mode.
+ * Local host doesn't have defined OVSDB_GROUP_ID (used in targets)
+ * It was define as  #ifdef OPS originaly and changed this way to be able to run tests.
+ */
+#if defined OPS && !defined OVS_TEST
             if(0 != chmod(bind_path, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP))
             {
               VLOG_ERR("\nError while changing mode of socket file - %s.\n", bind_path);

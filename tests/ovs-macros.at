@@ -1,4 +1,3 @@
-AT_TESTED([ovs-vswitchd])
 AT_TESTED([ovs-vsctl])
 AT_TESTED([perl])
 

@@ -4,7 +4,7 @@ m4_define([APPCTL], [ovs-appctl --timeout 20])
 m4_define([PYAPPCTL], [$PYTHON $srcdir/appctl.py --timeout 20])
 
 AT_SETUP([unixctl ovs-vswitchd exit - Python])
-AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([test $HAVE_PYTHON = no] || [test OVS_TEST])
 OVS_VSWITCHD_START
 
 AT_CHECK([PYAPPCTL -t ovs-vswitchd exit], [0], [])
@@ -15,7 +15,7 @@ OVS_WAIT_WHILE([test -s ovsdb-server.pid])
 AT_CLEANUP
 
 AT_SETUP([unixctl ovs-vswitchd list-commands - Python])
-AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([test $HAVE_PYTHON = no] || [test OVS_TEST])
 OVS_VSWITCHD_START
 
 AT_CHECK([APPCTL list-commands], [0], [stdout])
@@ -30,7 +30,7 @@ AT_CLEANUP
 
 
 AT_SETUP([unixctl ovs-vswitchd arguments - Python])
-AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([test $HAVE_PYTHON = no] || [test OVS_TEST])
 OVS_VSWITCHD_START
 
 AT_CHECK([APPCTL bond/hash], [2], [], [stderr])
