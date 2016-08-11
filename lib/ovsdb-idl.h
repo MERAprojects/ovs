@@ -240,6 +240,13 @@ struct ovs_list * ovsdb_idl_wait_update_get_list(struct ovsdb_idl *);
 #define WAIT_UPDATE_FOR_EACH_SAFE(REQ, NEXT, IDL) \
     LIST_FOR_EACH_SAFE(REQ, NEXT, node, ovsdb_idl_wait_update_get_list(IDL))
 
+/* Iterates over all the current ovsdb_idl_wait_update
+ * requests AND REMOVES the request from the requests list.
+ * The developer still MUST release the request using
+ * ovsdb_idl_wait_update_destroy */
+#define WAIT_UPDATE_FOR_EACH_POP(REQ, IDL) \
+    LIST_FOR_EACH_POP(REQ, node, ovsdb_idl_wait_update_get_list(IDL))
+
 void ovsdb_idl_wait_update_destroy(struct ovsdb_idl_wait_update *);
 
 
