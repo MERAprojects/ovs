@@ -112,10 +112,8 @@ collectors_send(const struct collectors *c, const void *payload, size_t n)
         for (i = 0; i < c->n_fds; i++) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             if (send(c->fds[i], payload, n, 0) == -1) {
-                char *s = describe_fd(c->fds[i]);
-                VLOG_WARN_RL(&rl, "%s: sending to collector failed (%s)",
-                             s, ovs_strerror(errno));
-                free(s);
+                VLOG_WARN_RL(&rl, "sending sample to collector failed (%s)",
+                             ovs_strerror(errno));
             }
         }
     }
