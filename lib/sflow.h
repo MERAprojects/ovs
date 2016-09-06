@@ -663,7 +663,7 @@ typedef struct _SFLSample_datagram_hdr {
     u_int32_t num_records;           /* Number of tag-len-val flow/counter records to follow */
 } SFLSample_datagram_hdr;
 
-#define SFL_MAX_DATAGRAM_SIZE 1500
+#define SFL_MAX_DATAGRAM_SIZE 9000
 #define SFL_MIN_DATAGRAM_SIZE 200
 #define SFL_DEFAULT_DATAGRAM_SIZE 1400
 
